@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 
 // Use Node's configured CA trust for proxied HTTPS, with verification enabled.
 test.beforeEach(async ({ page }) => {
@@ -337,4 +338,70 @@ test('mobile expanded controls, height toggle, outside dismissal and exit', asyn
   await page.locator('[data-control=exit]').click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('link', { name: '3D', exact: true })).toBeVisible();
+});
+
+
+test('control height persists in Dexie and database backups', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 844 });
+  await createDeck(page);
+  const deckUrl = page.url();
+  await expandControls(page);
+  await page.locator('[data-control=height]').click();
+  await expect(page.locator('.world-dock')).toHaveClass(/world-dock-low/);
+  // Export checks the actual Dexie settings store, rather than another browser cache.
+  await page.goto('/data');
+  const downloading = page.waitForEvent('download');
+  await page.locator('.data-actions button').first().click();
+  const download = await downloading;
+  const backup = JSON.parse(await readFile((await download.path())!, 'utf8'));
+  expect(backup.data.settings).toContainEqual({ key: 'world-low-controls', value: 'true', updatedAt: expect.any(String) });
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(deckUrl);
+  await expect(page.locator('.world-scene')).toHaveAttribute('data-position', '0.0000');
+  await expect(page.locator('.world-dock')).toHaveClass(/world-dock-low/);
+  await page.reload();
+  await expect(page.locator('.world-dock')).toHaveClass(/world-dock-low/);
+  await expandControls(page);
+  await page.locator('[data-control=height]').click();
+  await expect(page.locator('.world-dock')).not.toHaveClass(/world-dock-low/);
+  await page.reload();
+  await expect(page.locator('.world-scene')).toHaveAttribute('data-position', '0.0000');
+  await expect(page.locator('.world-dock')).not.toHaveClass(/world-dock-low/);
+});
+
+test('Next double click queues consecutive stone animations, capped at four, and blur cancels them', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await createDeck(page);
+  const next = page.locator('[data-control=next]');
+  await next.hover();
+  const box = (await next.boundingBox())!;
+  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  await page.evaluate(() => {
+    const host = document.querySelector<HTMLElement>('.world-scene')!;
+    const samples: number[] = [];
+    (window as unknown as { stepPositions: number[] }).stepPositions = samples;
+    new MutationObserver(() => samples.push(Number(host.dataset.position))).observe(host, { attributes: true, attributeFilter: ['data-position'] });
+  });
+  await page.clock.install();
+  await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 100));
+  await page.mouse.dblclick(point.x, point.y);
+  await page.clock.runFor(450);
+  const between = Number(await page.locator('.world-scene').getAttribute('data-position'));
+  expect(between).toBeGreaterThan(3.6);
+  expect(between).toBeLessThan(7.2);
+  await page.clock.runFor(450);
+  await position(page, 7.2);
+  // Six rapid clicks request only four moves, spanning a deck boundary.
+  for (let i = 0; i < 6; i++) await page.mouse.click(point.x, point.y);
+  await page.clock.runFor(1700);
+  await position(page, 21.6);
+  const samples = await page.evaluate(() => (window as unknown as { stepPositions: number[] }).stepPositions);
+  expect(samples.filter((value, i) => i === 0 || samples[i - 1] !== value)).toEqual(expect.arrayContaining([3.6, 7.2, 10.8, 14.4, 18, 21.6]));
+  for (let i = 0; i < 4; i++) await page.mouse.click(point.x, point.y);
+  await page.clock.runFor(100);
+  const stopped = Number(await page.locator('.world-scene').getAttribute('data-position'));
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.clock.runFor(600);
+  await position(page, stopped);
+  await page.clock.resume();
 });

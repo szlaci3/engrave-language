@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { routes } from '../../app/routes';
 import { getVocabularyFile, updateVocabularyPair } from '../../db/vocabularyRepository';
 import { useUiLanguage } from '../settings/uiLanguage';
+import { getLowControls, saveLowControls } from '../settings/worldSettings';
 import { getChineseAudioTextParts } from './audioService';
 import { speakChinese, speakDutch } from './speech';
 import type { VocabularyFileWithEntries } from './types';
@@ -58,7 +59,7 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
 
   useEffect(() => {
     let active = true;
-    getVocabularyFile(fileId).then(value => { if (active) { setDeck(value); setLoading(false); } })
+    Promise.all([getVocabularyFile(fileId), getLowControls()]).then(([value, low]) => { if (active) { setDeck(value); setLowControls(low); setLoading(false); } })
       .catch(() => { if (active) { setError('Unable to load deck. Please reload.'); setLoading(false); } });
     return () => { active = false; };
   }, [fileId]);
@@ -124,6 +125,12 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
     if (!entry) return;
     setError(''); setDutch(entry.dutch); setChinese(entry.chinese); setEditing(true);
   }
+  async function toggleControlsHeight() {
+    const next = !lowControls;
+    setLowControls(next); setError('');
+    try { await saveLowControls(next); }
+    catch { setError(label('Could not save control height. Try again.', '无法保存控制栏高度，请重试。')); }
+  }
   async function savePair(event: React.FormEvent) {
     event.preventDefault();
     if (!entry || !dutch.trim() || !chinese.trim() || saving) return;
@@ -156,7 +163,7 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
         </div>
         <div className="world-option-actions">
           <button className="secondary-action" data-control="edit" onClick={edit}>{label('Edit', '编辑')}</button>
-          <button className="secondary-action" data-control="height" onClick={() => setLowControls(value => !value)}>{lowControls ? label('High controls', '升高控制栏') : label('Low controls', '降低控制栏')}</button>
+          <button className="secondary-action" data-control="height" onClick={toggleControlsHeight}>{lowControls ? label('High controls', '升高控制栏') : label('Low controls', '降低控制栏')}</button>
           <a className="secondary-action" data-control="exit" href={routes.home}>{label('Exit', '退出')}</a>
         </div>
         <label htmlFor="walk-speed">{label('Walking speed', '步行速度')} · {speed}×</label>

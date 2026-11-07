@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import type { Flashcard } from './flashcards';
 import { BOOK_SPACING, BOOK_THICKNESS, VISIBLE_BOOK_COUNT, REPEAT_PREVIEW_REMAINING, PASSED_BOOK_CACHE_COUNT, advanceBookDrop, WALK_SPEED, deckIndex, currentBookIndex, isMovementTarget, adjacentStone } from './navigation';
 
+const MAX_STEP_COUNT = 4;
+
 export function createNaveScene(host: HTMLElement, onCurrent: (index: number) => void, onError: () => void, onComplete: () => void) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
@@ -141,6 +143,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   };
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   let nearDistance = 6, speed = 1, target: number | null = null;
+  const queuedTargets: number[] = [];
   let books: Flashcard[] = [], position = 0, current = Number.NaN, direction = 0, frame = 0, previousTime = 0, disposed = false;
   const heldKeys = new Set<string>();
   const stoneBackgrounds = new Map<Flashcard['language'], HTMLCanvasElement>();
@@ -291,7 +294,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
       const step = WALK_SPEED * 2 * delta;
       const remaining = target - position;
       position = Math.abs(remaining) <= step ? target : position + Math.sign(remaining) * step;
-      if (position === target) target = null;
+      if (position === target) target = queuedTargets.shift() ?? null;
     } else if (books.length) position += movement * WALK_SPEED * speed * delta;
     host.dataset.position = position.toFixed(4);
     const animating = render(delta);
@@ -303,10 +306,10 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   const keydown = (event: KeyboardEvent) => {
     const key = event.key.toLowerCase();
     if (event.altKey || event.ctrlKey || event.metaKey || isMovementTarget(event.target) || !['arrowup', 'arrowdown'].includes(key)) return;
-    event.preventDefault(); target = null; heldKeys.add(key); invalidate();
+    event.preventDefault(); target = null; queuedTargets.length = 0; heldKeys.add(key); invalidate();
   };
   const keyup = (event: KeyboardEvent) => { heldKeys.delete(event.key.toLowerCase()); };
-  const stop = () => { heldKeys.clear(); direction = 0; target = null; };
+  const stop = () => { heldKeys.clear(); direction = 0; target = null; queuedTargets.length = 0; };
   const visibility = () => { if (document.hidden) stop(); };
   const contextLost = (event: Event) => { event.preventDefault(); stop(); onError(); };
   window.addEventListener('keydown', keydown); window.addEventListener('keyup', keyup); window.addEventListener('blur', stop);
@@ -340,10 +343,15 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
       if (reset) { position = 0; current = Number.NaN; stop(); }
       invalidate();
     },
-    move(value: number) { target = null; direction = value; invalidate(); },
+    move(value: number) { target = null; queuedTargets.length = 0; direction = value; invalidate(); },
     step(value: number) {
-      stop();
-      if (books.length) target = adjacentStone(position, value);
+      heldKeys.clear(); direction = 0;
+      if (!books.length) return;
+      if (target === null) target = adjacentStone(position, value);
+      else if (queuedTargets.length < MAX_STEP_COUNT - 1) {
+        // Plan from the last requested stop, so every click advances one stone.
+        queuedTargets.push(adjacentStone(queuedTargets.at(-1) ?? target, value));
+      }
       invalidate();
     },
     setSpeed(value: number) { speed = Math.max(.25, Math.min(3, value)); },
