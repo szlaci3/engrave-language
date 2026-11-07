@@ -1,4 +1,18 @@
 import { test, expect, type Page } from '@playwright/test';
+
+// Use Node's configured CA trust for proxied HTTPS, with verification enabled.
+test.beforeEach(async ({ page }) => {
+  if (process.env.ENGRAVE_TEST_PROXY) {
+    await page.route('https://**/*', async route => {
+      const response = await route.fetch();
+      await route.fulfill({ response });
+    });
+    if (process.env.ENGRAVE_TEST_URL) {
+      const response = await page.goto(process.env.ENGRAVE_TEST_URL);
+      expect(response?.status(), 'The deployed site must be reachable before testing the app').toBe(200);
+    }
+  }
+});
 async function createDeck(page: Page, title = 'Practice') {
   await page.route('https://en.wiktionary.org/**', r => r.fulfill({ json: { query: { pages: [] } } }));
   await page.goto('/files/new');
@@ -34,7 +48,7 @@ for (const width of [360, 1280]) {
     await page.locator('.world-controls button').nth(5).click(); await position(page, 10.8);
     await expect(page.locator('.world-heading [role=status]')).toContainText('书');
     await expect(page.locator('.world-controls button').nth(5)).toBeEnabled();
-    await page.screenshot({ path: `test-results/final-stone-${width}.png` });
+    await page.screenshot({ path: test.info().outputPath(`final-stone-${width}.png`) });
     await page.locator('.world-controls button').nth(4).click(); await position(page, 7.2);
     await page.locator('.world-controls button').nth(8).click();
     await page.locator('.world-options button').click();

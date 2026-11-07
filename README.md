@@ -29,3 +29,13 @@ Expand the toolbar to change continuous walking speed (0.25×–3×, remembered 
 Import this repository in Netlify. `netlify.toml` selects Node 24, `npm run build`, and the `dist` publish directory. SPA redirects support direct deck URLs and refresh. No server, environment secrets, or database service is required. This repository is prepared for deployment; deploying the site is a separate Netlify action.
 
 The world texture is bundled locally. Downloaded audio uses Wiktionary/Wikimedia when selected, with browser speech fallback. Voice availability depends on the device. Serve over HTTPS for deployment.
+
+## Check a deployed site
+
+To run the same isolated browser tests against Netlify, without starting a local server:
+
+```sh
+ENGRAVE_TEST_URL=https://engrave-l.netlify.app node_modules/.bin/playwright test
+```
+
+In the managed cloud environment, also set `ENGRAVE_TEST_PROXY="$HTTPS_PROXY"`. The test request layer uses the configured CA with TLS verification enabled. The hostname must be allowed by the environment network policy. Tests use disposable browser contexts and mock Wiktionary responses; they check the deployed application, not live audio delivery or voice availability.
