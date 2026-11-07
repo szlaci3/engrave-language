@@ -1,3 +1,11 @@
+# Current engrave-language guidance
+
+This repository started as an exact copy of wooord. The app is now engrave-language. Use the light blue water palette in `src/styles/theme.css`; the original Deep Study Blue and wooord name guidance below describe the source app and are superseded.
+
+Flashcards now use the 3D water world. Keep mobile-first controls in one icon row, language order switching, pair editing, draft autosave, and text fallback working. See README.md for current behavior and Netlify setup. Use existing checkouts; source repositories bookworm and wooord are references only. Push completed rounds when requested by the user. Validate with `npm run lint` and `npm run test:e2e` (includes production build).
+
+---
+
 # AGENTS.md
 
 ## Project

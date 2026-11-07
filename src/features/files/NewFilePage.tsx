@@ -31,10 +31,25 @@ function SaveIcon() {
   );
 }
 
+const DRAFT_KEY = 'engrave-new-deck-draft';
+function readDraft(): { title: string; rawText: string } {
+  try {
+    const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}');
+    return { title: typeof draft.title === 'string' ? draft.title : '', rawText: typeof draft.rawText === 'string' ? draft.rawText : '' };
+  } catch { return { title: '', rawText: '' }; }
+}
+
 export function NewFilePage() {
-  const { t } = useUiLanguage();
+  const { t, language } = useUiLanguage();
   const textareaId = useId();
-  const [rawText, setRawText] = useState('');
+  const [draft, setDraft] = useState(readDraft);
+  const { rawText, title } = draft;
+  const [draftStatus, setDraftStatus] = useState('');
+  function saveDraft(next: typeof draft) {
+    setDraft(next);
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(next)); setDraftStatus(language === 'zh' ? '草稿已自动保存到此设备。' : 'Draft autosaved on this device.'); }
+    catch { setDraftStatus(language === 'zh' ? '无法自动保存，请保持此页面打开并手动保存。' : 'Autosave unavailable. Keep this page open and save the deck.'); }
+  }
   const [message, setMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const parsedPreview = useMemo(() => parseVocabulary(rawText), [rawText]);
@@ -56,11 +71,12 @@ export function NewFilePage() {
 
     try {
       const savedFile = await createVocabularyFile({
-        title: createFileTitle(parsedPreview.entries[0].dutch),
+        title: title.trim() || createFileTitle(parsedPreview.entries[0].dutch),
         entries: parsedPreview.entries,
       });
 
-      window.location.assign(routes.file(savedFile.file.id));
+      try { localStorage.removeItem(DRAFT_KEY); } catch { /* Saved deck is already persisted in IndexedDB. */ }
+      window.location.assign(routes.flashcards(savedFile.file.id));
     } catch {
       setMessage(t('fileSaveError'));
       setIsSaving(false);
@@ -97,6 +113,9 @@ export function NewFilePage() {
           </button>
         </div>
 
+        <label className="field-label" htmlFor="deck-title">{t('fileTitle')}</label>
+        <input className="text-input" id="deck-title" value={title} placeholder={language === 'zh' ? '可选，留空则自动生成标题' : 'Optional — generated from the first word if empty'} onChange={e => saveDraft({ ...draft, title: e.target.value })} />
+        <p className="form-hint" role="status">{draftStatus || (language === 'zh' ? '输入时自动保存草稿到此设备。' : 'Your draft is saved on this device as you type.')}</p>
         <label className="field-label" htmlFor={textareaId}>
           {t('vocabularyText')}
         </label>
@@ -104,7 +123,7 @@ export function NewFilePage() {
           id={textareaId}
           className="vocabulary-textarea"
           value={rawText}
-          onChange={(event) => setRawText(event.target.value)}
+          onChange={(event) => saveDraft({ ...draft, rawText: event.target.value })}
           placeholder={'natuurlijk  当然\nbestel订购\nzalig舒服的'}
           rows={12}
         />

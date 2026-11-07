@@ -1,375 +1,159 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { routes } from '../../app/routes';
-import { getVocabularyFile } from '../../db/vocabularyRepository';
+import { getVocabularyFile, updateVocabularyPair } from '../../db/vocabularyRepository';
 import { useUiLanguage } from '../settings/uiLanguage';
-import {
-  getChineseAudioTextParts,
-  preloadVocabularyAudios,
-} from './audioService';
+import { getChineseAudioTextParts } from './audioService';
 import { speakChinese, speakDutch } from './speech';
-import type { VocabularyEntry, VocabularyFileWithEntries } from './types';
+import type { VocabularyFileWithEntries } from './types';
+import type { createNaveScene } from '../world/createNaveScene';
+import '../world/world.css';
 
-type FlashcardsPageProps = {
-  fileId: string;
-};
-
-type FlashcardDirection = 'dutch-to-chinese' | 'chinese-to-dutch';
-
-function SpeakerIcon() {
-  return (
-    <svg
-      className="button-icon"
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M4 9v6h4l5 4V5L8 9H4Zm12.6-.7-1.4 1.4A3.2 3.2 0 0 1 16 12c0 .9-.3 1.7-.8 2.3l1.4 1.4A5.1 5.1 0 0 0 18 12c0-1.4-.5-2.7-1.4-3.7Zm2.8-2.8L18 6.9a7.2 7.2 0 0 1 2 5.1c0 2-.8 3.8-2 5.1l1.4 1.4A9.1 9.1 0 0 0 22 12c0-2.5-1-4.8-2.6-6.5Z" />
-    </svg>
-  );
+type Scene = ReturnType<typeof createNaveScene>;
+type IconName = 'previous' | 'next' | 'back' | 'forward' | 'expand' | 'audio';
+function Icon({ name }: { name: IconName }) {
+  const paths = {
+    previous: 'M6 5v14M18 5l-9 7 9 7Z', next: 'M18 5v14M6 5l9 7-9 7Z',
+    back: 'm5 9 7 7 7-7', forward: 'm5 15 7-7 7 7',
+    expand: 'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5',
+    audio: 'M3 9v6h4l5 4V5L7 9Zm13-1a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14',
+  };
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d={paths[name]} /></svg>;
+}
+function readSpeed() {
+  try { const value = Number(localStorage.getItem('engrave-walk-speed')); return value >= .25 && value <= 3 ? value : 1; }
+  catch { return 1; }
 }
 
-function getFrontText(entry: VocabularyEntry, direction: FlashcardDirection) {
-  return direction === 'dutch-to-chinese' ? entry.dutch : entry.chinese;
-}
-
-function getBackText(entry: VocabularyEntry, direction: FlashcardDirection) {
-  return direction === 'dutch-to-chinese' ? entry.chinese : entry.dutch;
-}
-
-export function FlashcardsPage({ fileId }: FlashcardsPageProps) {
-  const { t } = useUiLanguage();
-  const [fileData, setFileData] = useState<VocabularyFileWithEntries | null>(
-    null,
-  );
-  const [isLoading, setIsLoading] = useState(true);
-  const [direction, setDirection] =
-    useState<FlashcardDirection>('chinese-to-dutch');
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isRevealed, setIsRevealed] = useState(false);
-  const [promptPresentationSequence, setPromptPresentationSequence] =
-    useState(0);
-  const [message, setMessage] = useState('');
-  const [activeAudioId, setActiveAudioId] = useState<string | null>(null);
-  const nextChinesePartByEntryId = useRef(new Map<string, number>());
-  const lastAutoPlayedPromptKey = useRef<string | null>(null);
+export function FlashcardsPage({ fileId }: { fileId: string }) {
+  const { language, t } = useUiLanguage();
+  const label = (en: string, zh: string) => language === 'zh' ? zh : en;
+  const [deck, setDeck] = useState<VocabularyFileWithEntries | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [ready, setReady] = useState(false);
+  const [fallback, setFallback] = useState(false);
+  const [first, setFirst] = useState<'zh' | 'nl'>('zh');
+  const previousFirst = useRef(first);
+  const [index, setIndex] = useState(0);
+  const [boundary, setBoundary] = useState({ start: true, end: false });
+  const [expanded, setExpanded] = useState(false);
+  const [speed, setSpeed] = useState(readSpeed);
+  const [editing, setEditing] = useState(false);
+  const [dutch, setDutch] = useState('');
+  const [chinese, setChinese] = useState('');
+  const [saving, setSaving] = useState(false);
+  const host = useRef<HTMLDivElement>(null);
+  const scene = useRef<Scene | null>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const chinesePart = useRef(new Map<string, number>());
+  const stones = useMemo(() => (deck?.entries ?? []).flatMap(entry => {
+    const pair = [{ id: entry.id + '-zh', title: entry.chinese, language: 'zh' as const },
+      { id: entry.id + '-nl', title: entry.dutch, language: 'nl' as const }];
+    return first === 'zh' ? pair : pair.reverse();
+  }), [deck, first]);
+  const entry = deck?.entries[Math.floor(index / 2)];
 
   useEffect(() => {
-    let isMounted = true;
-
-    async function loadFile() {
-      try {
-        const savedFile = await getVocabularyFile(fileId);
-
-        if (isMounted) {
-          setFileData(savedFile);
-        }
-
-        if (savedFile) {
-          preloadVocabularyAudios(savedFile.entries);
-        }
-      } catch {
-        if (isMounted) {
-          setMessage(t('flashcardsLoadError'));
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    void loadFile();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [fileId, t]);
-
-  const entries = fileData?.entries ?? [];
-  const currentEntry = entries[currentIndex] ?? null;
-  const progressText = useMemo(() => {
-    if (entries.length === 0) {
-      return '0 / 0';
-    }
-
-    return `${currentIndex + 1} / ${entries.length}`;
-  }, [currentIndex, entries.length]);
-
-  function changeDirection(nextDirection: FlashcardDirection) {
-    if (nextDirection === direction) {
-      return;
-    }
-
-    setDirection(nextDirection);
-    setIsRevealed(false);
-    setActiveAudioId(null);
-    setPromptPresentationSequence((sequence) => sequence + 1);
-  }
-
-  function goToPreviousCard() {
-    setCurrentIndex((index) =>
-      entries.length > 0 ? (index + entries.length - 1) % entries.length : 0,
-    );
-    setIsRevealed(false);
-    setActiveAudioId(null);
-    setPromptPresentationSequence((sequence) => sequence + 1);
-  }
-
-  function goToNextCard() {
-    if (entries.length === 0) {
-      setCurrentIndex(0);
-      setIsRevealed(false);
-      setActiveAudioId(null);
-      return;
-    }
-
-    if (currentIndex >= entries.length - 1) {
-      if (window.confirm('Go to start?')) {
-        setCurrentIndex(0);
-        setIsRevealed(false);
-        setActiveAudioId(null);
-        setPromptPresentationSequence((sequence) => sequence + 1);
-      } else if (fileData) {
-        window.location.href = routes.file(fileData.file.id);
-      }
-
-      return;
-    }
-
-    setCurrentIndex((index) => index + 1);
-    setIsRevealed(false);
-    setActiveAudioId(null);
-    setPromptPresentationSequence((sequence) => sequence + 1);
-  }
-
-  const finishAudio = useCallback((audioId: string) => {
-    setActiveAudioId((currentAudioId) =>
-      currentAudioId === audioId ? null : currentAudioId,
-    );
-  }, []);
-
-  const playChineseFlashcardAudio = useCallback((
-    entryId: string,
-    text: string,
-    onEnd: () => void,
-  ) => {
-    const parts = getChineseAudioTextParts(text);
-    const partIndex = nextChinesePartByEntryId.current.get(entryId) ?? 0;
-    const didStart = speakChinese(parts[partIndex % parts.length], { onEnd });
-
-    if (didStart) {
-      nextChinesePartByEntryId.current.set(
-        entryId,
-        (partIndex + 1) % parts.length,
-      );
-    }
-
-    return didStart;
-  }, []);
-
-  const playPromptAudio = useCallback(() => {
-    if (!currentEntry) {
-      return;
-    }
-
-    const audioId = `${currentEntry.id}:prompt`;
-    setActiveAudioId(audioId);
-
-    const onEnd = () => finishAudio(audioId);
-    const didStart =
-      direction === 'dutch-to-chinese'
-        ? speakDutch(currentEntry.dutch, { onEnd })
-        : playChineseFlashcardAudio(
-            currentEntry.id,
-            currentEntry.chinese,
-            onEnd,
-          );
-
-    if (!didStart) {
-      setActiveAudioId(null);
-    }
-  }, [currentEntry, direction, finishAudio, playChineseFlashcardAudio]);
-
+    let active = true;
+    getVocabularyFile(fileId).then(value => { if (active) { setDeck(value); setLoading(false); } })
+      .catch(() => { if (active) { setError('Unable to load deck. Please reload.'); setLoading(false); } });
+    return () => { active = false; };
+  }, [fileId]);
   useEffect(() => {
-    if (!currentEntry) {
-      return;
-    }
+    if (loading || !host.current || !deck?.entries.length) return;
+    let active = true;
+    import('../world/createNaveScene').then(({ createNaveScene }) => {
+      if (!active || !host.current) return;
+      try { scene.current = createNaveScene(host.current, setIndex, () => setFallback(true), (start, end) => setBoundary({ start, end })); setReady(true); }
+      catch { setFallback(true); }
+    }).catch(() => { if (active) setFallback(true); });
+    return () => { active = false; scene.current?.dispose(); scene.current = null; };
+  }, [loading, deck?.entries.length]);
+  useEffect(() => {
+    if (!ready) return;
+    const reset = previousFirst.current !== first;
+    scene.current?.update(stones, reset);
+    previousFirst.current = first;
+    if (reset) setIndex(0);
+  }, [stones, ready, first]);
+  useEffect(() => {
+    scene.current?.setSpeed(speed);
+    try { localStorage.setItem('engrave-walk-speed', String(speed)); } catch { /* Walking still works without storage. */ }
+  }, [speed, ready]);
+  useEffect(() => {
+    if (!editing) return;
+    scene.current?.stop();
+    const element = dialog.current; element?.showModal();
+    return () => element?.close();
+  }, [editing]);
 
-    const promptKey = [
-      fileId,
-      currentEntry.id,
-      direction,
-      promptPresentationSequence,
-    ].join(':');
-
-    if (lastAutoPlayedPromptKey.current === promptKey) {
-      return;
-    }
-
-    lastAutoPlayedPromptKey.current = promptKey;
-    playPromptAudio();
-  }, [
-    currentEntry,
-    direction,
-    fileId,
-    playPromptAudio,
-    promptPresentationSequence,
-  ]);
-
-  function playAnswerAudio() {
-    if (!currentEntry) {
-      return;
-    }
-
-    const audioId = `${currentEntry.id}:answer`;
-    setActiveAudioId(audioId);
-
-    const onEnd = () => finishAudio(audioId);
-    const didStart =
-      direction === 'dutch-to-chinese'
-        ? playChineseFlashcardAudio(
-            currentEntry.id,
-            currentEntry.chinese,
-            onEnd,
-          )
-        : speakDutch(currentEntry.dutch, { onEnd });
-
-    if (!didStart) {
-      setActiveAudioId(null);
-    }
+  function hold(event: PointerEvent<HTMLButtonElement>, direction: number) {
+    if (!event.isPrimary || event.button !== 0) return;
+    event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId);
+    scene.current?.move(direction);
   }
-
-  return (
-    <main className="app-shell">
-      <header className="page-header">
-        <a className="back-link" href={routes.home}>
-          wooord
-        </a>
-        <p className="eyebrow">{t('flashcards')}</p>
-      </header>
-
-      <section className="content-card" aria-label={t('flashcards')}>
-        {isLoading ? (
-          <p className="empty-state">{t('loadingFlashcards')}</p>
-        ) : fileData && currentEntry ? (
-          <>
-            <div className="flashcard-heading">
-              <div>
-                <h1 className="page-title">{fileData.file.title}</h1>
-                <p className="flashcard-progress">{progressText}</p>
-              </div>
-              <a className="text-link" href={routes.file(fileData.file.id)}>
-                {t('file')}
-              </a>
-            </div>
-
-            {message ? <p className="form-message">{message}</p> : null}
-
-            <div className="segmented-control" aria-label={t('flashcardDirection')}>
-              <button
-                className={
-                  direction === 'dutch-to-chinese'
-                    ? 'segment-button segment-button-active'
-                    : 'segment-button'
-                }
-                type="button"
-                onClick={() => changeDirection('dutch-to-chinese')}
-              >
-                {t('dutch')}
-              </button>
-              <button
-                className={
-                  direction === 'chinese-to-dutch'
-                    ? 'segment-button segment-button-active'
-                    : 'segment-button'
-                }
-                type="button"
-                onClick={() => changeDirection('chinese-to-dutch')}
-              >
-                {t('chinese')}
-              </button>
-            </div>
-
-            <button
-              className="flashcard-card"
-              type="button"
-              onClick={() => setIsRevealed((value) => !value)}
-              aria-pressed={isRevealed}
-            >
-              <span className="flashcard-label">
-                {isRevealed ? t('answer') : t('prompt')}
-              </span>
-              <span
-                className={
-                  direction === 'chinese-to-dutch' && !isRevealed
-                    ? 'flashcard-text flashcard-text-chinese'
-                    : direction === 'dutch-to-chinese' && isRevealed
-                      ? 'flashcard-text flashcard-text-chinese'
-                      : 'flashcard-text'
-                }
-              >
-                {isRevealed
-                  ? getBackText(currentEntry, direction)
-                  : getFrontText(currentEntry, direction)}
-              </span>
-            </button>
-
-            <div className="flashcard-audio-row">
-              <button
-                className={
-                  activeAudioId === `${currentEntry.id}:prompt`
-                    ? 'secondary-action action-button flashcard-audio-active'
-                    : 'secondary-action action-button'
-                }
-                type="button"
-                aria-pressed={activeAudioId === `${currentEntry.id}:prompt`}
-                onClick={playPromptAudio}
-              >
-                <SpeakerIcon />
-                {direction === 'dutch-to-chinese'
-                  ? t('dutch')
-                  : t('chinese')}
-              </button>
-              <button
-                className={
-                  activeAudioId === `${currentEntry.id}:answer`
-                    ? 'secondary-action action-button flashcard-audio-active'
-                    : 'secondary-action action-button'
-                }
-                type="button"
-                aria-pressed={activeAudioId === `${currentEntry.id}:answer`}
-                onClick={playAnswerAudio}
-              >
-                <SpeakerIcon />
-                {direction === 'dutch-to-chinese'
-                  ? t('chinese')
-                  : t('dutch')}
-              </button>
-            </div>
-
-            <div className="flashcard-nav-row">
-              <button
-                className="secondary-action action-button"
-                type="button"
-                onClick={goToPreviousCard}
-              >
-                {t('previous')}
-              </button>
-              <button
-                className="primary-action action-button"
-                type="button"
-                onClick={goToNextCard}
-              >
-                {t('next')}
-              </button>
-            </div>
-          </>
-        ) : fileData ? (
-          <p className="empty-state">{t('noEntriesForFlashcards')}</p>
-        ) : (
-          <p className="empty-state">{t('fileNotFound')}</p>
-        )}
-      </section>
-    </main>
-  );
+  function step(direction: number) {
+    if (fallback) setIndex(value => Math.max(0, Math.min(stones.length - 1, value + direction)));
+    else scene.current?.step(direction);
+  }
+  function listen(lang: 'zh' | 'nl') {
+    if (!entry) return;
+    if (lang === 'nl') { speakDutch(entry.dutch); return; }
+    const parts = getChineseAudioTextParts(entry.chinese);
+    const part = chinesePart.current.get(entry.id) ?? 0;
+    if (speakChinese(parts[part % parts.length])) chinesePart.current.set(entry.id, part + 1);
+  }
+  function edit() {
+    if (!entry) return;
+    setError(''); setDutch(entry.dutch); setChinese(entry.chinese); setEditing(true);
+  }
+  async function savePair(event: React.FormEvent) {
+    event.preventDefault();
+    if (!entry || !dutch.trim() || !chinese.trim() || saving) return;
+    setSaving(true);
+    try {
+      const updated = await updateVocabularyPair(fileId, entry.id, dutch.trim(), chinese.trim());
+      setDeck(updated); setEditing(false);
+    } catch { setError(label('Could not save. Try again.', '无法保存，请重试。')); }
+    finally { setSaving(false); }
+  }
+  const stop = () => scene.current?.move(0);
+  return <main className="world-page">
+    <div className="world-scene" ref={host} />
+    <header className="world-heading">
+      <a href={routes.home}>engrave-language</a>
+      <h1>{deck?.file.title ?? t('flashcards')}</h1>
+      <p role="status" aria-live="polite">{loading ? t('loadingFlashcards') : `${Math.min(index + 1, stones.length)} / ${stones.length} · ${stones[index]?.title ?? ''}`}</p>
+    </header>
+    {(!loading && !stones.length) && <div className="world-notice">{deck ? t('noEntriesForFlashcards') : t('fileNotFound')} <a href={routes.home}>{label('Back to decks', '返回')}</a></div>}
+    {fallback && entry && <section className="world-fallback"><p>{label('3D is unavailable on this device. You can still practice here.', '此设备无法显示3D，仍可在此学习。')}</p><h2>{stones[index]?.title}</h2></section>}
+    {error && !editing && <p role="alert" className="world-notice">{error}</p>}
+    {!!stones.length && <footer className="world-dock">
+      {expanded && <section className="world-options" id="world-options">
+        <label htmlFor="walk-speed">{label('Walking speed', '步行速度')} · {speed}×</label>
+        <input id="walk-speed" type="range" min="0.25" max="3" step="0.25" value={speed} onChange={e => setSpeed(Number(e.target.value))} />
+        <button className="secondary-action" onClick={edit}>{label('Edit card', '编辑卡片')}</button>
+      </section>}
+      <nav className="world-controls" aria-label={label('Practice controls', '学习控制')}>
+        <button title={label('Dutch first', '荷兰语优先')} aria-label={label('Dutch first', '荷兰语优先')} aria-pressed={first === 'nl'} onClick={() => { setFirst('nl'); if (fallback) setIndex(0); }}>NL</button>
+        <button title={label('Chinese first', '中文优先')} aria-label={label('Chinese first', '中文优先')} aria-pressed={first === 'zh'} onClick={() => { setFirst('zh'); if (fallback) setIndex(0); }}>中</button>
+        <button title={label('Listen Chinese', '听中文')} aria-label={label('Listen Chinese', '听中文')} onClick={() => listen('zh')}><Icon name="audio" /><small>中</small></button>
+        <button title={label('Listen Dutch', '听荷兰语')} aria-label={label('Listen Dutch', '听荷兰语')} onClick={() => listen('nl')}><Icon name="audio" /><small>NL</small></button>
+        <button title={t('previous')} aria-label={t('previous')} disabled={fallback ? index === 0 : boundary.start} onClick={() => step(-1)}><Icon name="previous" /></button>
+        <button title={t('next')} aria-label={t('next')} disabled={fallback ? index === stones.length - 1 : boundary.end} onClick={() => step(1)}><Icon name="next" /></button>
+        <button title={label('Hold to walk back', '按住后退')} aria-label={label('Hold to walk back', '按住后退')} disabled={fallback} onPointerDown={e => hold(e, -1)} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop} onContextMenu={e => e.preventDefault()}><Icon name="back" /></button>
+        <button title={label('Hold to walk forward', '按住前进')} aria-label={label('Hold to walk forward', '按住前进')} disabled={fallback} onPointerDown={e => hold(e, 1)} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop} onContextMenu={e => e.preventDefault()}><Icon name="forward" /></button>
+        <button title={label('More controls', '更多控制')} aria-label={label('More controls', '更多控制')} aria-expanded={expanded} aria-controls="world-options" onClick={() => { scene.current?.stop(); setExpanded(!expanded); }}><Icon name="expand" /></button>
+      </nav>
+    </footer>}
+    {editing && <dialog ref={dialog} className="world-editor" onCancel={e => { if (saving) e.preventDefault(); else setEditing(false); }}>
+      <form onSubmit={savePair}>
+        <h2>{label('Edit card', '编辑卡片')}</h2>
+        <label>{t('dutch')}<textarea autoFocus required value={dutch} onChange={e => setDutch(e.target.value)} /></label>
+        <label>{t('chinese')}<textarea required value={chinese} onChange={e => setChinese(e.target.value)} /></label>
+        {error && <p role="alert">{error}</p>}
+        <div><button type="button" disabled={saving} onClick={() => setEditing(false)}>{label('Cancel', '取消')}</button><button type="submit" disabled={saving || !dutch.trim() || !chinese.trim()}>{saving ? '…' : label('Save', '保存')}</button></div>
+      </form>
+    </dialog>}
+  </main>;
 }
