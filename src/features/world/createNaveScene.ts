@@ -2,7 +2,7 @@ import { createParquetFloor } from './parquetFloor';
 import { architectureTexture } from './architectureTexture';
 import * as THREE from 'three';
 import type { Flashcard } from './flashcards';
-import { BOOK_SPACING, BOOK_THICKNESS, VISIBLE_BOOK_COUNT, PASSED_BOOK_CACHE_COUNT, advanceBookDrop, WALK_SPEED, clampPosition, currentBookIndex, isMovementTarget, adjacentStone } from './navigation';
+import { BOOK_SPACING, BOOK_THICKNESS, VISIBLE_BOOK_COUNT, REPEAT_PREVIEW_REMAINING, PASSED_BOOK_CACHE_COUNT, advanceBookDrop, WALK_SPEED, clampPosition, currentBookIndex, isMovementTarget, adjacentStone } from './navigation';
 
 export function createNaveScene(host: HTMLElement, onCurrent: (index: number) => void, onError: () => void, onBoundary: (start: boolean, end: boolean) => void, onComplete: () => void) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -216,7 +216,17 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
     if (index !== current) { current = index; onCurrent(index); }
     // Retain the last three covers in GPU memory for immediate backward navigation.
     const start = Math.max(0, index - PASSED_BOOK_CACHE_COUNT);
-    const visible = books.slice(start, index + VISIBLE_BOOK_COUNT);
+    // Stage the next round before the horizon empties, without changing the
+    // practice boundary or completion notification. Each copy owns a distinct
+    // mesh/reflection so short decks can appear more than once in the row.
+    const previewNextRound = books.length > 0 && books.length - 1 - index <= REPEAT_PREVIEW_REMAINING;
+    const end = previewNextRound ? index + VISIBLE_BOOK_COUNT : Math.min(books.length, index + VISIBLE_BOOK_COUNT);
+    const visible = books.length ? Array.from({ length: end - start }, (_, offset) => {
+      const absoluteIndex = start + offset;
+      const book = books[absoluteIndex % books.length];
+      return absoluteIndex < books.length ? book : { ...book, id: `${book.id}:round-${Math.floor(absoluteIndex / books.length)}` };
+    }) : [];
+    renderer.domElement.setAttribute('aria-description', visible.slice(index - start).map(book => book.title).join(' → '));
     const ids = new Set(visible.map(book => book.id));
     for (const [id, mesh] of bookMeshes) if (!ids.has(id)) removeBook(id, mesh);
     visible.forEach((book, offset) => {

@@ -169,3 +169,33 @@ test('3D loops from the last stone with a nonblocking notice', async ({ page }) 
   const stopped = Number(await page.locator('.world-scene').getAttribute('data-position'));
   await page.waitForTimeout(250); await position(page, stopped);
 });
+
+test('next round is visible ten stones before the end without an early notice', async ({ page }) => {
+  test.setTimeout(120000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/files/new');
+  await page.locator('textarea').fill(Array.from({ length: 12 }, (_, i) => `woord${i} 词${i}`).join('\n'));
+  await page.locator('button[type=submit]').click();
+  await page.waitForURL(/\/flashcards$/);
+  await expect(page.locator('canvas')).toBeVisible();
+  for (let i = 1; i <= 12; i++) {
+    await page.locator('.world-controls button').nth(5).click();
+    await position(page, i * 3.6);
+  }
+  // Index 12: eleven stones remain after the current one. No preview yet.
+  await expect(page.locator('canvas')).not.toHaveAttribute('aria-description', /词0 → woord0/);
+  await page.locator('.world-controls button').nth(5).click(); await position(page, 13 * 3.6);
+  // Index 13: ten remain, and the beginning of the next round is already visible.
+  await expect(page.locator('canvas')).toHaveAttribute('aria-description', /词11 → woord11 → 词0 → woord0/);
+  await expect(page.locator('.world-complete')).toHaveCount(0);
+  await expect(page.locator('.world-heading [role=status]')).toContainText('14 / 24');
+  await page.screenshot({ path: test.info().outputPath('next-round-ahead-mobile.png') });
+  for (let i = 14; i <= 23; i++) {
+    await page.locator('.world-controls button').nth(5).click();
+    await position(page, i * 3.6);
+  }
+  await expect(page.locator('.world-complete')).toHaveCount(0);
+  await page.locator('.world-controls button').nth(5).click(); await position(page, 0);
+  await expect(page.locator('.world-complete')).toBeVisible();
+  await expect(page.locator('.world-heading [role=status]')).toContainText('1 / 24');
+});

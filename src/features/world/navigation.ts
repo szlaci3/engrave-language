@@ -5,6 +5,7 @@ export const BOOK_NEAR_DISTANCE = 6;
 export const DETAIL_PRELOAD_COUNT = 2;
 export const PAGE_PRELOAD_REMAINING = 12;
 export const VISIBLE_BOOK_COUNT = 22;
+export const REPEAT_PREVIEW_REMAINING = 10;
 export const PASSED_BOOK_CACHE_COUNT = 3;
 export const BOOK_DROP_DURATION = 0.22;
 
