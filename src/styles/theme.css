@@ -4,6 +4,7 @@
   /* Sky, blue stone, and arch trim from Bookworm's water scene. */
   --color-bg: #dceaf4;
   --color-surface: #f5faff;
+  --color-control-bg: rgb(255 255 255 / 60%);
   --color-surface-soft: #b6d1e6;
 
   --color-primary: #365f7d;
