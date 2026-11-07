@@ -33,7 +33,7 @@ for (const width of [360, 1280]) {
     await expect(page.locator('.world-controls button').nth(5)).toBeEnabled();
     await page.locator('.world-controls button').nth(5).click(); await position(page, 10.8);
     await expect(page.locator('.world-heading [role=status]')).toContainText('书');
-    await expect(page.locator('.world-controls button').nth(5)).toBeDisabled();
+    await expect(page.locator('.world-controls button').nth(5)).toBeEnabled();
     await page.screenshot({ path: `test-results/final-stone-${width}.png` });
     await page.locator('.world-controls button').nth(4).click(); await position(page, 7.2);
     await page.locator('.world-controls button').nth(8).click();
@@ -117,6 +117,9 @@ test('deck buttons open working 2D and 3D practice on mobile', async ({ page }) 
   await expect(page.locator('.flashcard-text')).toHaveText('water');
   await page.locator('.flashcard-nav-row button').last().click();
   await expect(page.locator('.flashcard-text')).toHaveText('书');
+  await page.locator('.flashcard-nav-row button').last().click();
+  await expect(page.locator('.flashcard-text')).toHaveText('水');
+  await expect(page.locator('.form-message-success')).toBeVisible();
   await page.reload();
   await expect(page.locator('.flashcard-card')).toBeVisible();
   await page.goto(worldUrl.replace(/\/flashcards$/, ''));
@@ -127,4 +130,28 @@ test('deck buttons open working 2D and 3D practice on mobile', async ({ page }) 
   await page.getByRole('link', { name: '3D', exact: true }).click();
   await expect(page.locator('canvas')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+
+test('3D loops from the last stone with a nonblocking notice', async ({ page }) => {
+  await createDeck(page);
+  page.on('dialog', () => { throw new Error('Practice must not ask for confirmation'); });
+  for (let i = 1; i <= 3; i++) {
+    await page.locator('.world-controls button').nth(5).click();
+    await position(page, i * 3.6);
+  }
+  await page.locator('.world-controls button').nth(5).click();
+  await position(page, 0);
+  await expect(page.locator('.world-complete')).toBeVisible();
+  await expect(page.locator('.world-heading [role=status]')).toContainText('水');
+  for (let i = 1; i <= 2; i++) {
+    await page.locator('.world-controls button').nth(5).click();
+    await position(page, i * 3.6);
+  }
+  await page.clock.install();
+  await timedWalk(page, 1000);
+  await expect(page.locator('.world-complete')).toBeVisible();
+  expect(Number(await page.locator('.world-scene').getAttribute('data-position'))).toBeLessThan(7.2);
+  const stopped = Number(await page.locator('.world-scene').getAttribute('data-position'));
+  await page.waitForTimeout(250); await position(page, stopped);
 });

@@ -1,3 +1,4 @@
+import { usePracticeCompletion } from './usePracticeCompletion';
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { routes } from '../../app/routes';
 import { getVocabularyFile, updateVocabularyPair } from '../../db/vocabularyRepository';
@@ -26,6 +27,7 @@ function readSpeed() {
 
 export function FlashcardsPage({ fileId }: { fileId: string }) {
   const { language, t } = useUiLanguage();
+  const { notice, complete } = usePracticeCompletion();
   const label = (en: string, zh: string) => language === 'zh' ? zh : en;
   const [deck, setDeck] = useState<VocabularyFileWithEntries | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,11 +66,11 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
     let active = true;
     import('../world/createNaveScene').then(({ createNaveScene }) => {
       if (!active || !host.current) return;
-      try { scene.current = createNaveScene(host.current, setIndex, () => setFallback(true), (start, end) => setBoundary({ start, end })); setReady(true); }
+      try { scene.current = createNaveScene(host.current, setIndex, () => setFallback(true), (start, end) => setBoundary({ start, end }), complete); setReady(true); }
       catch { setFallback(true); }
     }).catch(() => { if (active) setFallback(true); });
     return () => { active = false; scene.current?.dispose(); scene.current = null; };
-  }, [loading, deck?.entries.length]);
+  }, [loading, deck?.entries.length, complete]);
   useEffect(() => {
     if (!ready) return;
     const reset = previousFirst.current !== first;
@@ -93,7 +95,10 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
     scene.current?.move(direction);
   }
   function step(direction: number) {
-    if (fallback) setIndex(value => Math.max(0, Math.min(stones.length - 1, value + direction)));
+    if (fallback) {
+      if (direction > 0 && index === stones.length - 1) { complete(); setIndex(0); }
+      else setIndex(value => Math.max(0, Math.min(stones.length - 1, value + direction)));
+    }
     else scene.current?.step(direction);
   }
   function listen(lang: 'zh' | 'nl') {
@@ -125,6 +130,7 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
       <h1>{deck?.file.title ?? t('flashcards')}</h1>
       <p role="status" aria-live="polite">{loading ? t('loadingFlashcards') : `${Math.min(index + 1, stones.length)} / ${stones.length} · ${stones[index]?.title ?? ''}`}</p>
     </header>
+    {!!notice && <p key={notice} role="status" className="world-complete">{t('practiceComplete')}</p>}
     {(!loading && !stones.length) && <div className="world-notice">{deck ? t('noEntriesForFlashcards') : t('fileNotFound')} <a href={routes.home}>{label('Back to decks', '返回')}</a></div>}
     {fallback && entry && <section className="world-fallback"><p>{label('3D is unavailable on this device. You can still practice here.', '此设备无法显示3D，仍可在此学习。')}</p><h2>{stones[index]?.title}</h2></section>}
     {error && !editing && <p role="alert" className="world-notice">{error}</p>}
@@ -140,7 +146,7 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
         <button title={label('Listen Chinese', '听中文')} aria-label={label('Listen Chinese', '听中文')} onClick={() => listen('zh')}><Icon name="audio" /><small>中</small></button>
         <button title={label('Listen Dutch', '听荷兰语')} aria-label={label('Listen Dutch', '听荷兰语')} onClick={() => listen('nl')}><Icon name="audio" /><small>NL</small></button>
         <button title={t('previous')} aria-label={t('previous')} disabled={fallback ? index === 0 : boundary.start} onClick={() => step(-1)}><Icon name="previous" /></button>
-        <button title={t('next')} aria-label={t('next')} disabled={fallback ? index === stones.length - 1 : boundary.end} onClick={() => step(1)}><Icon name="next" /></button>
+        <button title={t('next')} aria-label={t('next')} onClick={() => step(1)}><Icon name="next" /></button>
         <button title={label('Hold to walk back', '按住后退')} aria-label={label('Hold to walk back', '按住后退')} disabled={fallback} onPointerDown={e => hold(e, -1)} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop} onContextMenu={e => e.preventDefault()}><Icon name="back" /></button>
         <button title={label('Hold to walk forward', '按住前进')} aria-label={label('Hold to walk forward', '按住前进')} disabled={fallback} onPointerDown={e => hold(e, 1)} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop} onContextMenu={e => e.preventDefault()}><Icon name="forward" /></button>
         <button title={label('More controls', '更多控制')} aria-label={label('More controls', '更多控制')} aria-expanded={expanded} aria-controls="world-options" onClick={() => { scene.current?.stop(); setExpanded(!expanded); }}><Icon name="expand" /></button>

@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import type { Flashcard } from './flashcards';
 import { BOOK_SPACING, BOOK_THICKNESS, VISIBLE_BOOK_COUNT, PASSED_BOOK_CACHE_COUNT, advanceBookDrop, WALK_SPEED, clampPosition, currentBookIndex, isMovementTarget, adjacentStone } from './navigation';
 
-export function createNaveScene(host: HTMLElement, onCurrent: (index: number) => void, onError: () => void, onBoundary: (start: boolean, end: boolean) => void) {
+export function createNaveScene(host: HTMLElement, onCurrent: (index: number) => void, onError: () => void, onBoundary: (start: boolean, end: boolean) => void, onComplete: () => void) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.setClearColor('#dceaf4');
@@ -247,6 +247,11 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
     renderer.render(scene, camera);
     return animating;
   }
+  function restartRound() {
+    position = 0; current = -1; target = null;
+    for (const id of bookDrops.keys()) bookDrops.set(id, 0);
+    onComplete();
+  }
   function tick(time: number) {
     frame = 0;
     const delta = previousTime ? Math.min((time - previousTime) / 1000, .15) : 0;
@@ -258,11 +263,19 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
       const remaining = target - position;
       position = Math.abs(remaining) <= step ? target : position + Math.sign(remaining) * step;
       if (position === target) target = null;
-    } else position = clampPosition(position + movement * WALK_SPEED * speed * delta, books.length);
+    } else {
+      const next = position + movement * WALK_SPEED * speed * delta;
+      if (movement > 0 && books.length > 1 && next > (books.length - 1) * BOOK_SPACING) {
+        // Render the last stone at its full viewing size before looping.
+        if (position < (books.length - 1) * BOOK_SPACING) position = (books.length - 1) * BOOK_SPACING;
+        else restartRound();
+      }
+      else position = clampPosition(next, books.length);
+    }
     host.dataset.position = position.toFixed(4);
     const animating = render(delta);
     // Stop boundary movement frames while allowing book exit animations to finish.
-    const canContinue = movement !== 0 && clampPosition(position + Math.sign(movement), books.length) !== position;
+    const canContinue = movement > 0 ? books.length > 1 : movement < 0 && position > 0;
     if (canContinue || animating || target !== null) frame = requestAnimationFrame(tick); else previousTime = 0;
   }
   function invalidate() { if (!disposed && !frame) frame = requestAnimationFrame(tick); }
@@ -303,7 +316,12 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
     update(next: Flashcard[], reset: boolean) { for (const [id, mesh] of bookMeshes) removeBook(id, mesh);
       books = next; if (reset) { position = 0; current = -1; stop(); } position = clampPosition(position, books.length); invalidate(); },
     move(value: number) { target = null; direction = value; invalidate(); },
-    step(value: number) { stop(); target = adjacentStone(position, books.length, value); invalidate(); },
+    step(value: number) {
+      stop();
+      if (value > 0 && books.length && position >= (books.length - 1) * BOOK_SPACING - .00001) restartRound();
+      else target = adjacentStone(position, books.length, value);
+      invalidate();
+    },
     setSpeed(value: number) { speed = Math.max(.25, Math.min(3, value)); },
     stop,
 

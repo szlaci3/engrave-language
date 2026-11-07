@@ -1,3 +1,4 @@
+import { usePracticeCompletion } from './usePracticeCompletion';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { routes } from '../../app/routes';
 import { getVocabularyFile } from '../../db/vocabularyRepository';
@@ -38,6 +39,7 @@ function getBackText(entry: VocabularyEntry, direction: FlashcardDirection) {
 
 export function FlatFlashcardsPage({ fileId }: FlashcardsPageProps) {
   const { t } = useUiLanguage();
+  const { notice, complete } = usePracticeCompletion();
   const [fileData, setFileData] = useState<VocabularyFileWithEntries | null>(
     null,
   );
@@ -124,14 +126,11 @@ export function FlatFlashcardsPage({ fileId }: FlashcardsPageProps) {
     }
 
     if (currentIndex >= entries.length - 1) {
-      if (window.confirm('Go to start?')) {
-        setCurrentIndex(0);
-        setIsRevealed(false);
-        setActiveAudioId(null);
-        setPromptPresentationSequence((sequence) => sequence + 1);
-      } else if (fileData) {
-        window.location.href = routes.file(fileData.file.id);
-      }
+      complete();
+      setCurrentIndex(0);
+      setIsRevealed(false);
+      setActiveAudioId(null);
+      setPromptPresentationSequence((sequence) => sequence + 1);
 
       return;
     }
@@ -263,6 +262,7 @@ export function FlatFlashcardsPage({ fileId }: FlashcardsPageProps) {
               </a>
             </div>
 
+            {!!notice && <p key={notice} role="status" className="form-message form-message-success">{t('practiceComplete')}</p>}
             {message ? <p className="form-message">{message}</p> : null}
 
             <div className="segmented-control" aria-label={t('flashcardDirection')}>
