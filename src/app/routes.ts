@@ -4,6 +4,7 @@ export const routes = {
   data: '/data',
   settings: '/settings',
   file: (fileId: string) => `/files/${fileId}`,
+  flatFlashcards: (fileId: string) => `/files/${fileId}/flashcards/2d`,
   flashcards: (fileId: string) => `/files/${fileId}/flashcards`,
   folder: (folderId: string) => `/folders/${folderId}`,
 } as const;
@@ -14,6 +15,7 @@ export type AppRoute =
   | { name: 'data' }
   | { name: 'settings' }
   | { name: 'file'; fileId: string }
+  | { name: 'flatFlashcards'; fileId: string }
   | { name: 'flashcards'; fileId: string }
   | { name: 'folder'; folderId: string };
 
@@ -28,6 +30,11 @@ export function getCurrentRoute(pathname: string): AppRoute {
 
   if (pathname === routes.settings) {
     return { name: 'settings' };
+  }
+
+  if (pathname.startsWith('/files/') && pathname.endsWith('/flashcards/2d')) {
+    const fileId = pathname.slice('/files/'.length, -'/flashcards/2d'.length);
+    if (fileId) return { name: 'flatFlashcards', fileId };
   }
 
   if (pathname.startsWith('/files/') && pathname.endsWith('/flashcards')) {

@@ -1,3 +1,4 @@
+import { DeckStudyLinks } from './DeckStudyLinks';
 import { type FormEvent, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { routes } from '../../app/routes';
 import {
@@ -334,12 +335,7 @@ export function FileListPage() {
                           : ''}
                       </span>
                     </a>
-                    <a
-                      className="file-list-study-link"
-                      href={routes.flashcards(file.id)}
-                    >
-                      {t('flashcards')}
-                    </a>
+                    <DeckStudyLinks fileId={file.id} />
                   </div>
                 </li>
               ))}

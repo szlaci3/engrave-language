@@ -1,3 +1,4 @@
+import { DeckStudyLinks } from '../files/DeckStudyLinks';
 import { useEffect, useState } from 'react';
 import { routes } from '../../app/routes';
 import {
@@ -85,12 +86,7 @@ export function FolderFilesPage({ folderId }: FolderFilesPageProps) {
                           {formatDisplayDate(file.createdAt)}
                         </span>
                       </a>
-                      <a
-                        className="file-list-study-link"
-                        href={routes.flashcards(file.id)}
-                      >
-                        {t('flashcards')}
-                      </a>
+                      <DeckStudyLinks fileId={file.id} />
                     </div>
                   </li>
                 ))}

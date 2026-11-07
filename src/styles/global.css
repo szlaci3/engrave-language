@@ -777,3 +777,17 @@ h2 {
     font-size: 2.25rem;
   }
 }
+
+.deck-study-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(44px, 1fr));
+  gap: 6px;
+}
+.deck-study-links .file-list-study-link {
+  min-width: 44px;
+  padding-inline: 8px;
+}
+.content-card > .deck-study-links {
+  width: fit-content;
+  margin-top: 18px;
+}

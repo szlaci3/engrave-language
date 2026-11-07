@@ -1,3 +1,4 @@
+import { DeckStudyLinks } from './DeckStudyLinks';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { routes } from '../../app/routes';
 import {
@@ -310,12 +311,7 @@ export function FileViewPage({ fileId }: FileViewPageProps) {
               </div>
             ) : (
               <>
-                <a
-                  className="secondary-action file-study-link"
-                  href={routes.flashcards(fileData.file.id)}
-                >
-                  {t('studyFlashcards')}
-                </a>
+                <DeckStudyLinks fileId={fileData.file.id} />
 
                 <ol className="entry-list">
                   {fileData.entries.map((entry) => (
