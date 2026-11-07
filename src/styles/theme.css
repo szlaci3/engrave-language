@@ -1,18 +1,21 @@
 :root {
-  --color-bg: #07111f;
-  --color-surface: #0f1f33;
-  --color-surface-soft: #173451;
+  color-scheme: light;
 
-  --color-primary: #38bdf8;
-  --color-primary-dark: #0284c7;
-  --color-primary-soft: #082f49;
+  /* Sky, blue stone, and arch trim from Bookworm's water scene. */
+  --color-bg: #dceaf4;
+  --color-surface: #f5faff;
+  --color-surface-soft: #b6d1e6;
 
-  --color-text: #f8fafc;
-  --color-text-muted: #cbd5e1;
+  --color-primary: #365f7d;
+  --color-primary-dark: #173e5d;
+  --color-primary-soft: #e5f1fa;
 
-  --color-border: #2b5f87;
-  --color-focus: #7dd3fc;
+  --color-text: #173e5d;
+  --color-text-muted: #365f7d;
 
-  --color-danger: #fb7185;
-  --color-success: #4ade80;
+  --color-border: #6698ba;
+  --color-focus: #173e5d;
+
+  --color-danger: #b42342;
+  --color-success: #17663e;
 }
