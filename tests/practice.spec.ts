@@ -4,8 +4,16 @@ import { test, expect, type Page } from '@playwright/test';
 test.beforeEach(async ({ page }) => {
   if (process.env.ENGRAVE_TEST_PROXY) {
     await page.route('https://**/*', async route => {
-      const response = await route.fetch();
-      await route.fulfill({ response });
+      try {
+        const response = await route.fetch();
+        await route.fulfill({ response });
+      } catch (error) {
+        // Reload can cancel an older document's requests while Node is still
+        // fetching them. Chromium has already handled those routes by aborting.
+        if (page.isClosed() || route.request().failure() ||
+          (error instanceof Error && error.message.includes('Route is already handled'))) return;
+        throw error;
+      }
     });
     if (process.env.ENGRAVE_TEST_URL) {
       const response = await page.goto(process.env.ENGRAVE_TEST_URL);
@@ -13,9 +21,9 @@ test.beforeEach(async ({ page }) => {
     }
   }
 });
-// Let verified proxy requests finish before Playwright closes the context.
+// Assertions are finished; canceled reload requests must not fail teardown.
 test.afterEach(async ({ page }) => {
-  await page.unrouteAll({ behavior: 'wait' });
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
 });
 
 async function createDeck(page: Page, title = 'Practice') {
