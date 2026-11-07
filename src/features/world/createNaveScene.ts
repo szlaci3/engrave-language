@@ -2,9 +2,9 @@ import { createParquetFloor } from './parquetFloor';
 import { architectureTexture } from './architectureTexture';
 import * as THREE from 'three';
 import type { Flashcard } from './flashcards';
-import { BOOK_SPACING, BOOK_THICKNESS, VISIBLE_BOOK_COUNT, REPEAT_PREVIEW_REMAINING, PASSED_BOOK_CACHE_COUNT, advanceBookDrop, WALK_SPEED, clampPosition, currentBookIndex, isMovementTarget, adjacentStone } from './navigation';
+import { BOOK_SPACING, BOOK_THICKNESS, VISIBLE_BOOK_COUNT, REPEAT_PREVIEW_REMAINING, PASSED_BOOK_CACHE_COUNT, advanceBookDrop, WALK_SPEED, deckIndex, currentBookIndex, isMovementTarget, adjacentStone } from './navigation';
 
-export function createNaveScene(host: HTMLElement, onCurrent: (index: number) => void, onError: () => void, onBoundary: (start: boolean, end: boolean) => void, onComplete: () => void) {
+export function createNaveScene(host: HTMLElement, onCurrent: (index: number) => void, onError: () => void, onComplete: () => void) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.setClearColor('#dceaf4');
@@ -97,12 +97,12 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   const reflectionGap = .2;
   const bookGeometry = keep(new THREE.BoxGeometry(5.3, stoneHeight, BOOK_THICKNESS));
   const frontGeometry = keep(new THREE.PlaneGeometry(5.3, stoneHeight));
-  const bookMeshes = new Map<string, THREE.Group>();
-  const bookDrops = new Map<string, number>();
+  const bookMeshes = new Map<number, THREE.Group>();
+  const bookDrops = new Map<number, number>();
   const reflectedStones = new THREE.Scene();
   reflectedStones.fog = scene.fog;
   for (const child of scene.children) if (child instanceof THREE.Light) reflectedStones.add(child.clone());
-  const reflectionMeshes = new Map<string, THREE.Group>();
+  const reflectionMeshes = new Map<number, THREE.Group>();
   // Architecture uses the floor's usual clipped pass. Stones need a separate
   // unclipped pass because raising their reflection crosses the physical floor.
   const reflectScene = floor.onBeforeRender;
@@ -143,10 +143,11 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
     }
   };
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  let previousBoundary = '';
   let nearDistance = 6, speed = 1, target: number | null = null;
-  let books: Flashcard[] = [], position = 0, current = -1, direction = 0, frame = 0, previousTime = 0, disposed = false;
+  let books: Flashcard[] = [], position = 0, current = Number.NaN, direction = 0, frame = 0, previousTime = 0, disposed = false;
   const heldKeys = new Set<string>();
+  const stoneBackgrounds = new Map<Flashcard['language'], HTMLCanvasElement>();
+  const covers = new Map<string, { title: string; language: Flashcard['language']; material: THREE.MeshBasicMaterial }>();
   const placeholder = (book: Flashcard) => {
     // Match the face aspect ratio so glyphs retain their natural proportions.
     const canvas = document.createElement('canvas');
@@ -154,32 +155,40 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
     canvas.width = width; canvas.height = height;
     const ctx = canvas.getContext('2d')!;
     const chinese = book.language === 'zh';
-    // Fine-grained limestone with subtle sediment bands and calcite flecks.
-    let seed = 53;
-    const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
-    const pixels = ctx.createImageData(width, height);
-    const base = chinese ? [72, 88, 100] : [192, 185, 166];
-    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-      const band = Math.sin(y * .075 + Math.sin(x * .009) * 1.8) * 2.5;
-      const mineral = Math.sin(x * .019 + y * .025) * Math.sin(y * .031 - x * .011) * 4;
-      const grit = (random() - .5) * 18;
-      const i = (y * width + x) * 4;
-      for (let channel = 0; channel < 3; channel++) pixels.data[i + channel] = base[channel] + band + mineral + grit;
-      pixels.data[i + 3] = 255;
+    let background = stoneBackgrounds.get(book.language);
+    if (background) ctx.drawImage(background, 0, 0);
+    else {
+      // Fine-grained limestone with subtle sediment bands and calcite flecks.
+      let seed = 53;
+      const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+      const pixels = ctx.createImageData(width, height);
+      const base = chinese ? [72, 88, 100] : [192, 185, 166];
+      for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+        const band = Math.sin(y * .075 + Math.sin(x * .009) * 1.8) * 2.5;
+        const mineral = Math.sin(x * .019 + y * .025) * Math.sin(y * .031 - x * .011) * 4;
+        const grit = (random() - .5) * 18;
+        const i = (y * width + x) * 4;
+        for (let channel = 0; channel < 3; channel++) pixels.data[i + channel] = base[channel] + band + mineral + grit;
+        pixels.data[i + 3] = 255;
+      }
+      ctx.putImageData(pixels, 0, 0);
+      for (let i = 0; i < 1600; i++) {
+        const x = random() * width, y = random() * height;
+        ctx.fillStyle = random() > .6 ? '#e8e5d638' : '#18232b24';
+        ctx.beginPath(); ctx.ellipse(x, y, .4 + random() * 1.5, .3 + random() * .7, random() * Math.PI, 0, Math.PI * 2); ctx.fill();
+      }
+      // Slightly worn edges retain the appearance of a solid cut slab.
+      ctx.strokeStyle = '#15212c30'; ctx.lineWidth = 8; ctx.strokeRect(0, 0, width, height);
+      // Preserve the inset border with a shallow engraved highlight.
+      ctx.strokeStyle = chinese ? '#c0c7c080' : '#575e5880';
+      ctx.lineWidth = 2; ctx.strokeRect(30, 22, width - 60, height - 44);
+      ctx.strokeStyle = '#f0e8d52b'; ctx.lineWidth = 1;
+      ctx.strokeRect(32, 24, width - 64, height - 48);
+      background = document.createElement('canvas');
+      background.width = width; background.height = height;
+      background.getContext('2d')!.drawImage(canvas, 0, 0);
+      stoneBackgrounds.set(book.language, background);
     }
-    ctx.putImageData(pixels, 0, 0);
-    for (let i = 0; i < 1600; i++) {
-      const x = random() * width, y = random() * height;
-      ctx.fillStyle = random() > .6 ? '#e8e5d638' : '#18232b24';
-      ctx.beginPath(); ctx.ellipse(x, y, .4 + random() * 1.5, .3 + random() * .7, random() * Math.PI, 0, Math.PI * 2); ctx.fill();
-    }
-    // Slightly worn edges retain the appearance of a solid cut slab.
-    ctx.strokeStyle = '#15212c30'; ctx.lineWidth = 8; ctx.strokeRect(0, 0, width, height);
-    // Preserve the inset border with a shallow engraved highlight.
-    ctx.strokeStyle = chinese ? '#c0c7c080' : '#575e5880';
-    ctx.lineWidth = 2; ctx.strokeRect(30, 22, width - 60, height - 44);
-    ctx.strokeStyle = '#f0e8d52b'; ctx.lineWidth = 1;
-    ctx.strokeRect(32, 24, width - 64, height - 48);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = chinese ? '#f7f3e8' : '#273238';
     ctx.font = '22px sans-serif'; ctx.fillText(chinese ? '中文' : 'NEDERLANDS', width / 2, 65);
@@ -198,53 +207,70 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
     shown.forEach((text, i) => ctx.fillText(text, width / 2, height * .61 + (i - (shown.length - 1) / 2) * fontSize * 1.15));
     const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; return texture;
   };
-  function removeBook(id: string, group: THREE.Group) {
+  function coverMaterial(book: Flashcard) {
+    const cached = covers.get(book.id);
+    if (cached && cached.title === book.title && cached.language === book.language) {
+      // Refresh insertion order for the bounded least-recently-used cache.
+      covers.delete(book.id); covers.set(book.id, cached);
+      return cached.material;
+    }
+    const material = new THREE.MeshBasicMaterial({ map: placeholder(book) });
+    covers.set(book.id, { title: book.title, language: book.language, material });
+    return material;
+  }
+  function removeBook(id: number, group: THREE.Group) {
     scene.remove(group);
     reflectedStones.remove(reflectionMeshes.get(id)!); reflectionMeshes.delete(id);
-    const cover = group.children[1] as THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
-    cover.material.map?.dispose(); cover.material.dispose(); bookMeshes.delete(id); bookDrops.delete(id);
+    bookMeshes.delete(id); bookDrops.delete(id);
+  }
+  function clearBooks() {
+    for (const [id, mesh] of bookMeshes) removeBook(id, mesh);
+    for (const { material } of covers.values()) { material.map?.dispose(); material.dispose(); }
+    covers.clear();
+  }
+  function trimCovers() {
+    if (covers.size <= VISIBLE_BOOK_COUNT * 3) return;
+    const used = new Set([...bookMeshes.values()].map(group => (group.children[1] as THREE.Mesh).material));
+    for (const [id, { material }] of covers) {
+      if (covers.size <= VISIBLE_BOOK_COUNT * 3) break;
+      if (!used.has(material)) { material.map?.dispose(); material.dispose(); covers.delete(id); }
+    }
   }
   function render(delta: number) {
     if (disposed) return false;
     let animating = false;
-    nave.position.z = position % 10;
-    floor.position.z = -80 + position % 4;
-    const index = currentBookIndex(position, books.length);
-    const atStart = position <= .00001, atEnd = position >= Math.max(0, books.length - 1) * BOOK_SPACING - .00001;
-    const boundary = `${atStart}:${atEnd}`;
-    if (boundary !== previousBoundary) { previousBoundary = boundary; onBoundary(atStart, atEnd); }
-    if (index !== current) { current = index; onCurrent(index); }
-    // Retain the last three covers in GPU memory for immediate backward navigation.
-    const start = Math.max(0, index - PASSED_BOOK_CACHE_COUNT);
-    // Stage the next round before the horizon empties, without changing the
-    // practice boundary or completion notification. Each copy owns a distinct
-    // mesh/reflection so short decks can appear more than once in the row.
-    const previewNextRound = books.length > 0 && books.length - 1 - index <= REPEAT_PREVIEW_REMAINING;
-    const end = previewNextRound ? index + VISIBLE_BOOK_COUNT : Math.min(books.length, index + VISIBLE_BOOK_COUNT);
-    const visible = books.length ? Array.from({ length: end - start }, (_, offset) => {
-      const absoluteIndex = start + offset;
-      const book = books[absoluteIndex % books.length];
-      return absoluteIndex < books.length ? book : { ...book, id: `${book.id}:round-${Math.floor(absoluteIndex / books.length)}` };
-    }) : [];
-    renderer.domElement.setAttribute('aria-description', visible.slice(index - start).map(book => book.title).join(' → '));
-    const ids = new Set(visible.map(book => book.id));
-    for (const [id, mesh] of bookMeshes) if (!ids.has(id)) removeBook(id, mesh);
-    visible.forEach((book, offset) => {
-      const bookIndex = start + offset;
-      let group = bookMeshes.get(book.id);
+    nave.position.z = ((position % 10) + 10) % 10;
+    floor.position.z = -80 + ((position % 4) + 4) % 4;
+    if (!books.length) { renderer.render(scene, camera); return false; }
+    const index = currentBookIndex(position);
+    if (index !== current) {
+      if (Number.isFinite(current) && Math.floor(index / books.length) > Math.floor(current / books.length)) onComplete();
+      current = index; onCurrent(deckIndex(index, books.length));
+    }
+    // A bounded GPU window over an infinite, reversible row. Repeated cards use
+    // distinct occurrence indices while sharing the same cover texture.
+    const start = index - PASSED_BOOK_CACHE_COUNT;
+    const roundEnd = (Math.floor(index / books.length) + 1) * books.length;
+    const previewNextRound = roundEnd - 1 - index <= REPEAT_PREVIEW_REMAINING;
+    const end = previewNextRound ? index + VISIBLE_BOOK_COUNT : Math.min(roundEnd, index + VISIBLE_BOOK_COUNT);
+    const upcoming = Array.from({ length: end - index }, (_, offset) => books[deckIndex(index + offset, books.length)].title);
+    renderer.domElement.setAttribute('aria-description', upcoming.join(' → '));
+    for (const [id, mesh] of bookMeshes) if (id < start || id >= end) removeBook(id, mesh);
+    for (let bookIndex = start; bookIndex < end; bookIndex++) {
+      const book = books[deckIndex(bookIndex, books.length)];
+      let group = bookMeshes.get(bookIndex);
       if (!group) {
         group = new THREE.Group();
-        bookDrops.set(book.id, bookIndex < index ? 1 : 0);
+        bookDrops.set(bookIndex, bookIndex < index ? 1 : 0);
         group.add(new THREE.Mesh(bookGeometry, book.language === 'zh' ? blueStone : whiteStone));
-        const material = new THREE.MeshBasicMaterial({ map: placeholder(book) });
-        const cover = new THREE.Mesh(frontGeometry, material); cover.position.z = BOOK_THICKNESS / 2 + .005; group.add(cover);
-        bookMeshes.set(book.id, group); scene.add(group);
+        const cover = new THREE.Mesh(frontGeometry, coverMaterial(book)); cover.position.z = BOOK_THICKNESS / 2 + .005; group.add(cover);
+        bookMeshes.set(bookIndex, group); scene.add(group);
         const reflected = group.clone();
-        reflectionMeshes.set(book.id, reflected); reflectedStones.add(reflected);
+        reflectionMeshes.set(bookIndex, reflected); reflectedStones.add(reflected);
       }
       const passed = bookIndex < index;
-      const drop = advanceBookDrop(bookDrops.get(book.id) ?? 0, passed, delta, reducedMotion.matches);
-      bookDrops.set(book.id, drop);
+      const drop = advanceBookDrop(bookDrops.get(bookIndex) ?? 0, passed, delta, reducedMotion.matches);
+      bookDrops.set(bookIndex, drop);
       animating ||= drop !== (passed ? 1 : 0);
       const easedDrop = drop * drop * (3 - 2 * drop);
       // Keep departing books clear of the camera and move fully below even a portrait frustum.
@@ -253,14 +279,10 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
       group.position.set(0, stoneCenterY - easedDrop * dropDistance, -depth);
       // Cached books require no draw calls once the exit completes.
       group.visible = drop < 1;
-    });
+    }
+    trimCovers();
     renderer.render(scene, camera);
     return animating;
-  }
-  function restartRound() {
-    position = 0; current = -1; target = null;
-    for (const id of bookDrops.keys()) bookDrops.set(id, 0);
-    onComplete();
   }
   function tick(time: number) {
     frame = 0;
@@ -273,19 +295,11 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
       const remaining = target - position;
       position = Math.abs(remaining) <= step ? target : position + Math.sign(remaining) * step;
       if (position === target) target = null;
-    } else {
-      const next = position + movement * WALK_SPEED * speed * delta;
-      if (movement > 0 && books.length > 1 && next > (books.length - 1) * BOOK_SPACING) {
-        // Render the last stone at its full viewing size before looping.
-        if (position < (books.length - 1) * BOOK_SPACING) position = (books.length - 1) * BOOK_SPACING;
-        else restartRound();
-      }
-      else position = clampPosition(next, books.length);
-    }
+    } else if (books.length) position += movement * WALK_SPEED * speed * delta;
     host.dataset.position = position.toFixed(4);
     const animating = render(delta);
-    // Stop boundary movement frames while allowing book exit animations to finish.
-    const canContinue = movement > 0 ? books.length > 1 : movement < 0 && position > 0;
+    // Finish the downward exit even after the user releases the walking control.
+    const canContinue = movement !== 0 && books.length > 0;
     if (canContinue || animating || target !== null) frame = requestAnimationFrame(tick); else previousTime = 0;
   }
   function invalidate() { if (!disposed && !frame) frame = requestAnimationFrame(tick); }
@@ -323,13 +337,15 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   wallpaper.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
   observer.observe(host); invalidate();
   return {
-    update(next: Flashcard[], reset: boolean) { for (const [id, mesh] of bookMeshes) removeBook(id, mesh);
-      books = next; if (reset) { position = 0; current = -1; stop(); } position = clampPosition(position, books.length); invalidate(); },
+    update(next: Flashcard[], reset: boolean) {
+      clearBooks(); books = next;
+      if (reset) { position = 0; current = Number.NaN; stop(); }
+      invalidate();
+    },
     move(value: number) { target = null; direction = value; invalidate(); },
     step(value: number) {
       stop();
-      if (value > 0 && books.length && position >= (books.length - 1) * BOOK_SPACING - .00001) restartRound();
-      else target = adjacentStone(position, books.length, value);
+      if (books.length) target = adjacentStone(position, value);
       invalidate();
     },
     setSpeed(value: number) { speed = Math.max(.25, Math.min(3, value)); },
@@ -339,7 +355,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
       disposed = true; cancelAnimationFrame(frame); observer.disconnect();
       window.removeEventListener('keydown', keydown); window.removeEventListener('keyup', keyup); window.removeEventListener('blur', stop);
       document.removeEventListener('visibilitychange', visibility); renderer.domElement.removeEventListener('webglcontextlost', contextLost);
-      for (const [id, mesh] of bookMeshes) removeBook(id, mesh);
+      clearBooks(); stoneBackgrounds.clear();
       parquet.dispose();
       resources.forEach(resource => resource.dispose()); renderer.dispose(); renderer.domElement.remove();
     },

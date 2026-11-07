@@ -37,7 +37,6 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
   const [first, setFirst] = useState<'zh' | 'nl'>('zh');
   const previousFirst = useRef(first);
   const [index, setIndex] = useState(0);
-  const [boundary, setBoundary] = useState({ start: true, end: false });
   const [lowControls, setLowControls] = useState(false);
   const dock = useRef<HTMLElement>(null);
   const [expanded, setExpanded] = useState(false);
@@ -68,7 +67,7 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
     let active = true;
     import('../world/createNaveScene').then(({ createNaveScene }) => {
       if (!active || !host.current) return;
-      try { scene.current = createNaveScene(host.current, setIndex, () => setFallback(true), (start, end) => setBoundary({ start, end }), complete); setReady(true); }
+      try { scene.current = createNaveScene(host.current, setIndex, () => setFallback(true), complete); setReady(true); }
       catch { setFallback(true); }
     }).catch(() => { if (active) setFallback(true); });
     return () => { active = false; scene.current?.dispose(); scene.current = null; };
@@ -152,7 +151,7 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
         <div className="world-controls world-secondary-controls">
 <button data-control="dutch" title={label('Dutch first', '荷兰语优先')} aria-label={label('Dutch first', '荷兰语优先')} aria-pressed={first === 'nl'} onClick={() => { setFirst('nl'); if (fallback) setIndex(0); }}>NL</button>
 <button data-control="chinese" title={label('Chinese first', '中文优先')} aria-label={label('Chinese first', '中文优先')} aria-pressed={first === 'zh'} onClick={() => { setFirst('zh'); if (fallback) setIndex(0); }}>中</button>
-<button data-control="previous" title={t('previous')} aria-label={t('previous')} disabled={fallback ? index === 0 : boundary.start} onClick={() => step(-1)}><Icon name="previous" /></button>
+<button data-control="previous" title={t('previous')} aria-label={t('previous')} disabled={fallback && index === 0} onClick={() => step(-1)}><Icon name="previous" /></button>
 <button data-control="back" title={label('Hold to walk back', '按住后退')} aria-label={label('Hold to walk back', '按住后退')} disabled={fallback} onPointerDown={e => hold(e, -1)} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop} onContextMenu={e => e.preventDefault()}><Icon name="back" /></button>
         </div>
         <div className="world-option-actions">

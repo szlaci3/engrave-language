@@ -169,7 +169,7 @@ test('deck buttons open working 2D and 3D practice on mobile', async ({ page }) 
 });
 
 
-test('3D loops from the last stone with a nonblocking notice', async ({ page }) => {
+test('3D continues through repeated decks and can retrace earlier rounds', async ({ page }) => {
   await createDeck(page);
   page.on('dialog', () => { throw new Error('Practice must not ask for confirmation'); });
   for (let i = 1; i <= 3; i++) {
@@ -177,19 +177,109 @@ test('3D loops from the last stone with a nonblocking notice', async ({ page }) 
     await position(page, i * 3.6);
   }
   await (await control(page, 5)).click();
-  await position(page, 0);
+  await position(page, 14.4);
   await expect(page.locator('.world-complete')).toBeVisible();
   await expect(page.locator('.world-heading [role=status]')).toContainText('水');
+  await page.screenshot({ path: test.info().outputPath('first-stone-next-round.png') });
   for (let i = 1; i <= 2; i++) {
     await (await control(page, 5)).click();
-    await position(page, i * 3.6);
+    await position(page, (4 + i) * 3.6);
   }
   await page.clock.install();
   await timedWalk(page, 1000);
   await expect(page.locator('.world-complete')).toBeVisible();
-  expect(Number(await page.locator('.world-scene').getAttribute('data-position'))).toBeLessThan(7.2);
+  expect(Number(await page.locator('.world-scene').getAttribute('data-position'))).toBeGreaterThan(25.2);
+  await expect(page.locator('.world-heading [role=status]')).toHaveText('1 / 4 · 水');
   const stopped = Number(await page.locator('.world-scene').getAttribute('data-position'));
   await page.waitForTimeout(250); await position(page, stopped);
+  // Retrace both rounds and continue into negative occurrences as well.
+  for (let occurrence = 7; occurrence >= -5; occurrence--) {
+    await (await control(page, 4)).click();
+    await position(page, occurrence * 3.6);
+    const index = ((occurrence % 4) + 4) % 4;
+    await expect(page.locator('.world-heading [role=status]')).toHaveText(`${index + 1} / 4 · ${['水', 'water', '书', 'boek'][index]}`);
+  }
+});
+
+
+test('held walking crosses the deck seam without resetting, skipping, or stopping', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 850 });
+  await createDeck(page);
+  for (let i = 1; i <= 3; i++) {
+    await (await control(page, 5)).click(); await position(page, i * 3.6);
+  }
+  await page.clock.install();
+  await (await control(page, 7)).hover();
+  await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 100));
+  await page.mouse.down();
+  let previous = 10.8;
+  const seen = new Set<string>();
+  for (let i = 0; i < 18; i++) {
+    await page.clock.runFor(160);
+    const next = Number(await page.locator('.world-scene').getAttribute('data-position'));
+    expect(next - previous).toBeGreaterThan(.65);
+    expect(next - previous).toBeLessThan(.9);
+    previous = next;
+    seen.add((await page.locator('.world-heading [role=status]').textContent())!);
+  }
+  await page.mouse.up();
+  await page.clock.runFor(300);
+  await position(page, previous);
+  expect([...seen]).toEqual(['1 / 4 · 水', '2 / 4 · water', '3 / 4 · 书', '4 / 4 · boek']);
+  await page.clock.resume();
+  // Reverse across multiple seams while the same hold remains active.
+  await (await control(page, 8)).click();
+  await page.locator('#walk-speed').fill('3');
+  await (await control(page, 6)).hover();
+  await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 100));
+  await page.mouse.down();
+  await page.clock.runFor(2000);
+  await page.mouse.up();
+  await page.clock.runFor(300);
+  const reversed = Number(await page.locator('.world-scene').getAttribute('data-position'));
+  expect(reversed).toBeLessThan(0);
+  await page.clock.resume();
+  await page.waitForTimeout(250); await position(page, reversed);
+  await page.screenshot({ path: test.info().outputPath('backward-round-mobile.png') });
+});
+
+test('new covers reuse stone artwork and repeated occurrences reuse cover textures', async ({ page }) => {
+  await page.setViewportSize({ width: 640, height: 480 });
+  await page.addInitScript(() => {
+    localStorage.setItem('engrave-walk-speed', '3');
+    const original = CanvasRenderingContext2D.prototype.createImageData;
+    CanvasRenderingContext2D.prototype.createImageData = function(...args: Parameters<typeof original>) {
+      if (this.canvas.width === 1024 && this.canvas.height === 319) {
+        document.documentElement.dataset.stoneArtworkCount = String(Number(document.documentElement.dataset.stoneArtworkCount || 0) + 1);
+      }
+      return Reflect.apply(original, this, args);
+    };
+    const fillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function(...args: Parameters<typeof fillText>) {
+      if (this.canvas.width === 1024 && this.canvas.height === 319) {
+        document.documentElement.dataset.stoneTextCount = String(Number(document.documentElement.dataset.stoneTextCount || 0) + 1);
+      }
+      return Reflect.apply(fillText, this, args);
+    };
+  });
+  await createDeck(page);
+  await expect(page.locator('html')).toHaveAttribute('data-stone-artwork-count', '2');
+  const textCount = await page.locator('html').getAttribute('data-stone-text-count');
+  await page.clock.install();
+  await timedWalk(page, 2400);
+  expect(Number(await page.locator('.world-scene').getAttribute('data-position'))).toBeGreaterThan(30);
+  await expect(page.locator('html')).toHaveAttribute('data-stone-artwork-count', '2');
+  await expect(page.locator('html')).toHaveAttribute('data-stone-text-count', textCount!);
+  // A larger deck introduces genuinely new covers into the visible window.
+  await page.goto('/files/new');
+  await page.locator('textarea').fill(Array.from({ length: 30 }, (_, i) => `word${i} 词${i}`).join('\n'));
+  await page.locator('button[type=submit]').click();
+  await page.waitForURL(/\/flashcards$/);
+  await position(page, 0);
+  const initial = Number(await page.locator('html').getAttribute('data-stone-text-count'));
+  await timedWalk(page, 2000);
+  expect(Number(await page.locator('html').getAttribute('data-stone-text-count'))).toBeGreaterThan(initial);
+  await expect(page.locator('html')).toHaveAttribute('data-stone-artwork-count', '2');
 });
 
 test('next round is visible ten stones before the end without an early notice', async ({ page }) => {
@@ -217,7 +307,7 @@ test('next round is visible ten stones before the end without an early notice', 
     await position(page, i * 3.6);
   }
   await expect(page.locator('.world-complete')).toHaveCount(0);
-  await (await control(page, 5)).click(); await position(page, 0);
+  await (await control(page, 5)).click(); await position(page, 24 * 3.6);
   await expect(page.locator('.world-complete')).toBeVisible();
   await expect(page.locator('.world-heading [role=status]')).toContainText('1 / 24');
 });
