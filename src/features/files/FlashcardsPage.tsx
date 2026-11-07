@@ -18,7 +18,7 @@ function Icon({ name }: { name: IconName }) {
     expand: 'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5',
     audio: 'M3 9v6h4l5 4V5L7 9Zm13-1a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14',
   };
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d={paths[name]} /></svg>;
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d={paths[name]} transform={name === 'previous' || name === 'next' ? 'rotate(-90 12 12)' : undefined} /></svg>;
 }
 function readSpeed() {
   try { const value = Number(localStorage.getItem('engrave-walk-speed')); return value >= .25 && value <= 3 ? value : 1; }
@@ -38,6 +38,8 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
   const previousFirst = useRef(first);
   const [index, setIndex] = useState(0);
   const [boundary, setBoundary] = useState({ start: true, end: false });
+  const [lowControls, setLowControls] = useState(false);
+  const dock = useRef<HTMLElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [speed, setSpeed] = useState(readSpeed);
   const [editing, setEditing] = useState(false);
@@ -89,6 +91,17 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
     return () => element?.close();
   }, [editing]);
 
+  useEffect(() => {
+    if (!expanded) return;
+    const outside = (event: globalThis.PointerEvent) => {
+      if (event.target instanceof Node && !dock.current?.contains(event.target)) {
+        scene.current?.stop(); setExpanded(false);
+      }
+    };
+    document.addEventListener('pointerdown', outside);
+    return () => document.removeEventListener('pointerdown', outside);
+  }, [expanded]);
+
   function hold(event: PointerEvent<HTMLButtonElement>, direction: number) {
     if (!event.isPrimary || event.button !== 0) return;
     event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId);
@@ -134,22 +147,28 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
     {(!loading && !stones.length) && <div className="world-notice">{deck ? t('noEntriesForFlashcards') : t('fileNotFound')} <a href={routes.home}>{label('Back to decks', '返回')}</a></div>}
     {fallback && entry && <section className="world-fallback"><p>{label('3D is unavailable on this device. You can still practice here.', '此设备无法显示3D，仍可在此学习。')}</p><h2>{stones[index]?.title}</h2></section>}
     {error && !editing && <p role="alert" className="world-notice">{error}</p>}
-    {!!stones.length && <footer className="world-dock">
+    {!!stones.length && <footer ref={dock} className={`world-dock${lowControls ? ' world-dock-low' : ''}`}>
       {expanded && <section className="world-options" id="world-options">
+        <div className="world-controls world-secondary-controls">
+<button data-control="dutch" title={label('Dutch first', '荷兰语优先')} aria-label={label('Dutch first', '荷兰语优先')} aria-pressed={first === 'nl'} onClick={() => { setFirst('nl'); if (fallback) setIndex(0); }}>NL</button>
+<button data-control="chinese" title={label('Chinese first', '中文优先')} aria-label={label('Chinese first', '中文优先')} aria-pressed={first === 'zh'} onClick={() => { setFirst('zh'); if (fallback) setIndex(0); }}>中</button>
+<button data-control="previous" title={t('previous')} aria-label={t('previous')} disabled={fallback ? index === 0 : boundary.start} onClick={() => step(-1)}><Icon name="previous" /></button>
+<button data-control="back" title={label('Hold to walk back', '按住后退')} aria-label={label('Hold to walk back', '按住后退')} disabled={fallback} onPointerDown={e => hold(e, -1)} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop} onContextMenu={e => e.preventDefault()}><Icon name="back" /></button>
+        </div>
+        <div className="world-option-actions">
+          <button className="secondary-action" data-control="edit" onClick={edit}>{label('Edit', '编辑')}</button>
+          <button className="secondary-action" data-control="height" onClick={() => setLowControls(value => !value)}>{lowControls ? label('High controls', '升高控制栏') : label('Low controls', '降低控制栏')}</button>
+          <a className="secondary-action" data-control="exit" href={routes.home}>{label('Exit', '退出')}</a>
+        </div>
         <label htmlFor="walk-speed">{label('Walking speed', '步行速度')} · {speed}×</label>
         <input id="walk-speed" type="range" min="0.25" max="3" step="0.25" value={speed} onChange={e => setSpeed(Number(e.target.value))} />
-        <button className="secondary-action" onClick={edit}>{label('Edit card', '编辑卡片')}</button>
       </section>}
-      <nav className="world-controls" aria-label={label('Practice controls', '学习控制')}>
-        <button title={label('Dutch first', '荷兰语优先')} aria-label={label('Dutch first', '荷兰语优先')} aria-pressed={first === 'nl'} onClick={() => { setFirst('nl'); if (fallback) setIndex(0); }}>NL</button>
-        <button title={label('Chinese first', '中文优先')} aria-label={label('Chinese first', '中文优先')} aria-pressed={first === 'zh'} onClick={() => { setFirst('zh'); if (fallback) setIndex(0); }}>中</button>
-        <button title={label('Listen Chinese', '听中文')} aria-label={label('Listen Chinese', '听中文')} onClick={() => listen('zh')}><Icon name="audio" /><small>中</small></button>
-        <button title={label('Listen Dutch', '听荷兰语')} aria-label={label('Listen Dutch', '听荷兰语')} onClick={() => listen('nl')}><Icon name="audio" /><small>NL</small></button>
-        <button title={t('previous')} aria-label={t('previous')} disabled={fallback ? index === 0 : boundary.start} onClick={() => step(-1)}><Icon name="previous" /></button>
-        <button title={t('next')} aria-label={t('next')} onClick={() => step(1)}><Icon name="next" /></button>
-        <button title={label('Hold to walk back', '按住后退')} aria-label={label('Hold to walk back', '按住后退')} disabled={fallback} onPointerDown={e => hold(e, -1)} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop} onContextMenu={e => e.preventDefault()}><Icon name="back" /></button>
-        <button title={label('Hold to walk forward', '按住前进')} aria-label={label('Hold to walk forward', '按住前进')} disabled={fallback} onPointerDown={e => hold(e, 1)} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop} onContextMenu={e => e.preventDefault()}><Icon name="forward" /></button>
-        <button title={label('More controls', '更多控制')} aria-label={label('More controls', '更多控制')} aria-expanded={expanded} aria-controls="world-options" onClick={() => { scene.current?.stop(); setExpanded(!expanded); }}><Icon name="expand" /></button>
+      <nav className="world-controls world-primary-controls" aria-label={label('Practice controls', '学习控制')}>
+<button data-control="listen-chinese" title={label('Listen Chinese', '听中文')} aria-label={label('Listen Chinese', '听中文')} onClick={() => listen('zh')}><Icon name="audio" /><small>中</small></button>
+<button data-control="listen-dutch" title={label('Listen Dutch', '听荷兰语')} aria-label={label('Listen Dutch', '听荷兰语')} onClick={() => listen('nl')}><Icon name="audio" /><small>NL</small></button>
+<button data-control="next" title={t('next')} aria-label={t('next')} onClick={() => step(1)}><Icon name="next" /></button>
+<button data-control="forward" title={label('Hold to walk forward', '按住前进')} aria-label={label('Hold to walk forward', '按住前进')} disabled={fallback} onPointerDown={e => hold(e, 1)} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop} onContextMenu={e => e.preventDefault()}><Icon name="forward" /></button>
+<button data-control="expand" title={label('More controls', '更多控制')} aria-label={label('More controls', '更多控制')} aria-expanded={expanded} aria-controls="world-options" onClick={() => { scene.current?.stop(); setExpanded(!expanded); }}><Icon name="expand" /></button>
       </nav>
     </footer>}
     {editing && <dialog ref={dialog} className="world-editor" onCancel={e => { if (saving) e.preventDefault(); else setEditing(false); }}>

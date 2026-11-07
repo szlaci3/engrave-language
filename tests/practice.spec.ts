@@ -26,6 +26,15 @@ test.afterEach(async ({ page }) => {
   await page.unrouteAll({ behavior: 'ignoreErrors' });
 });
 
+async function expandControls(page: Page) {
+  const button = page.locator('[data-control=expand]');
+  if (await button.getAttribute('aria-expanded') !== 'true') await button.click();
+}
+async function control(page: Page, index: number) {
+  const names = ['dutch', 'chinese', 'listen-chinese', 'listen-dutch', 'previous', 'next', 'back', 'forward', 'expand'];
+  if ([0, 1, 4, 6].includes(index)) await expandControls(page);
+  return page.locator(`[data-control="${names[index]}"]`);
+}
 async function createDeck(page: Page, title = 'Practice') {
   await page.route('https://en.wiktionary.org/**', r => r.fulfill({ json: { query: { pages: [] } } }));
   await page.goto('/files/new');
@@ -40,7 +49,7 @@ async function position(page: Page, value: number) {
   await expect.poll(async () => Number(await page.locator('.world-scene').getAttribute('data-position'))).toBeCloseTo(value, 3);
 }
 async function timedWalk(page: Page, duration: number) {
-  await page.locator('.world-controls button').nth(7).hover();
+  await (await control(page, 7)).hover();
   await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 100));
   await page.mouse.down();
   await page.clock.runFor(duration);
@@ -52,19 +61,19 @@ for (const width of [360, 1280]) {
     await page.setViewportSize({ width, height: 850 });
     const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
     await createDeck(page);
-    await page.locator('.world-controls button').nth(0).click(); // Dutch first
+    await (await control(page, 0)).click(); // Dutch first
     await expect(page.locator('.world-heading [role=status]')).toContainText('water');
-    for (let i = 1; i <= 2; i++) { await page.locator('.world-controls button').nth(5).click(); await position(page, 3.6 * i); }
+    for (let i = 1; i <= 2; i++) { await (await control(page, 5)).click(); await position(page, 3.6 * i); }
     await page.clock.install();
     await timedWalk(page, 100);
-    await expect(page.locator('.world-controls button').nth(5)).toBeEnabled();
-    await page.locator('.world-controls button').nth(5).click(); await position(page, 10.8);
+    await expect((await control(page, 5))).toBeEnabled();
+    await (await control(page, 5)).click(); await position(page, 10.8);
     await expect(page.locator('.world-heading [role=status]')).toContainText('书');
-    await expect(page.locator('.world-controls button').nth(5)).toBeEnabled();
+    await expect((await control(page, 5))).toBeEnabled();
     await page.screenshot({ path: test.info().outputPath(`final-stone-${width}.png`) });
-    await page.locator('.world-controls button').nth(4).click(); await position(page, 7.2);
-    await page.locator('.world-controls button').nth(8).click();
-    await page.locator('.world-options button').click();
+    await (await control(page, 4)).click(); await position(page, 7.2);
+    await expandControls(page);
+    await page.locator('[data-control=edit]').click();
     await expect(page.locator('dialog')).toBeVisible();
     await page.locator('dialog textarea').first().fill('boeken');
     await page.locator('dialog button[type=submit]').click();
@@ -72,9 +81,9 @@ for (const width of [360, 1280]) {
     await position(page, 7.2);
     await expect(page.locator('.world-heading [role=status]')).toContainText('boeken');
     await page.reload();
-    await page.locator('.world-controls button').nth(0).click();
+    await (await control(page, 0)).click();
     await expect(page.locator('.world-scene')).toHaveAttribute('data-position', '0.0000');
-    for (let i=1; i<=2; i++) { await page.locator('.world-controls button').nth(5).click(); await position(page, 3.6*i); }
+    for (let i=1; i<=2; i++) { await (await control(page, 5)).click(); await position(page, 3.6*i); }
     await expect(page.locator('.world-heading [role=status]')).toContainText('boeken');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]);
@@ -101,13 +110,13 @@ test('continuous walk stops on release and speed changes only continuous walk', 
   const first = Number(await page.locator('.world-scene').getAttribute('data-position'));
   expect(first).toBeGreaterThan(0);
   await page.waitForTimeout(350); await position(page, first);
-  await page.locator('.world-controls button').nth(8).click();
+  await expandControls(page);
   await page.locator('#walk-speed').fill('3');
-  await page.locator('.world-controls button').nth(4).click(); await position(page, 0);
+  await (await control(page, 4)).click(); await position(page, 0);
   await timedWalk(page, 320);
   const fast = Number(await page.locator('.world-scene').getAttribute('data-position'));
   expect(fast).toBeGreaterThan(first * 1.5);
-  await page.reload(); await page.locator('.world-controls button').nth(8).click();
+  await page.reload(); await expandControls(page);
   await expect(page.locator('#walk-speed')).toHaveValue('3');
 });
 
@@ -124,11 +133,11 @@ test('practice remains usable when WebGL is unavailable', async ({ page }) => {
   await page.locator('button[type=submit]').click();
   await expect(page.locator('.world-fallback')).toBeVisible();
   await expect(page.locator('.world-fallback h2')).toHaveText('水');
-  await page.locator('.world-controls button').nth(5).click();
+  await (await control(page, 5)).click();
   await expect(page.locator('.world-fallback h2')).toHaveText('water');
-  await page.locator('.world-controls button').nth(0).click();
+  await (await control(page, 0)).click();
   await expect(page.locator('.world-fallback h2')).toHaveText('water');
-  await expect(page.locator('.world-controls button').nth(7)).toBeDisabled();
+  await expect((await control(page, 7))).toBeDisabled();
 });
 
 test('deck buttons open working 2D and 3D practice on mobile', async ({ page }) => {
@@ -164,15 +173,15 @@ test('3D loops from the last stone with a nonblocking notice', async ({ page }) 
   await createDeck(page);
   page.on('dialog', () => { throw new Error('Practice must not ask for confirmation'); });
   for (let i = 1; i <= 3; i++) {
-    await page.locator('.world-controls button').nth(5).click();
+    await (await control(page, 5)).click();
     await position(page, i * 3.6);
   }
-  await page.locator('.world-controls button').nth(5).click();
+  await (await control(page, 5)).click();
   await position(page, 0);
   await expect(page.locator('.world-complete')).toBeVisible();
   await expect(page.locator('.world-heading [role=status]')).toContainText('水');
   for (let i = 1; i <= 2; i++) {
-    await page.locator('.world-controls button').nth(5).click();
+    await (await control(page, 5)).click();
     await position(page, i * 3.6);
   }
   await page.clock.install();
@@ -192,23 +201,50 @@ test('next round is visible ten stones before the end without an early notice', 
   await page.waitForURL(/\/flashcards$/);
   await expect(page.locator('canvas')).toBeVisible();
   for (let i = 1; i <= 12; i++) {
-    await page.locator('.world-controls button').nth(5).click();
+    await (await control(page, 5)).click();
     await position(page, i * 3.6);
   }
   // Index 12: eleven stones remain after the current one. No preview yet.
   await expect(page.locator('canvas')).not.toHaveAttribute('aria-description', /词0 → woord0/);
-  await page.locator('.world-controls button').nth(5).click(); await position(page, 13 * 3.6);
+  await (await control(page, 5)).click(); await position(page, 13 * 3.6);
   // Index 13: ten remain, and the beginning of the next round is already visible.
   await expect(page.locator('canvas')).toHaveAttribute('aria-description', /词11 → woord11 → 词0 → woord0/);
   await expect(page.locator('.world-complete')).toHaveCount(0);
   await expect(page.locator('.world-heading [role=status]')).toContainText('14 / 24');
   await page.screenshot({ path: test.info().outputPath('next-round-ahead-mobile.png') });
   for (let i = 14; i <= 23; i++) {
-    await page.locator('.world-controls button').nth(5).click();
+    await (await control(page, 5)).click();
     await position(page, i * 3.6);
   }
   await expect(page.locator('.world-complete')).toHaveCount(0);
-  await page.locator('.world-controls button').nth(5).click(); await position(page, 0);
+  await (await control(page, 5)).click(); await position(page, 0);
   await expect(page.locator('.world-complete')).toBeVisible();
   await expect(page.locator('.world-heading [role=status]')).toContainText('1 / 24');
+});
+
+test('mobile expanded controls, height toggle, outside dismissal and exit', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await createDeck(page);
+  await expect(page.locator('.world-primary-controls button')).toHaveCount(5);
+  await expect(page.locator('.world-dock')).toHaveCSS('bottom', '126.6px');
+  await expandControls(page);
+  await expect(page.locator('.world-secondary-controls button')).toHaveCount(4);
+  await expect(page.locator('[data-control=next] path')).toHaveAttribute('transform', 'rotate(-90 12 12)');
+  await expect(page.locator('[data-control=previous] path')).toHaveAttribute('transform', 'rotate(-90 12 12)');
+  const height = page.locator('[data-control=height]');
+  const highLabel = await height.textContent();
+  await height.click();
+  await expect(page.locator('.world-dock')).toHaveCSS('bottom', '5px');
+  expect(await height.textContent()).not.toBe(highLabel);
+  await page.mouse.click(300, 160);
+  await expect(page.locator('#world-options')).toHaveCount(0);
+  await expandControls(page);
+  await height.click();
+  await expect(page.locator('.world-dock')).toHaveCSS('bottom', '126.6px');
+  await expect(height).toHaveText(highLabel!);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: test.info().outputPath('expanded-mobile.png') });
+  await page.locator('[data-control=exit]').click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('link', { name: '3D', exact: true })).toBeVisible();
 });
