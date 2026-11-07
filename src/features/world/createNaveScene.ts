@@ -1,5 +1,4 @@
 import { createParquetFloor } from './parquetFloor';
-import { architectureTexture } from './architectureTexture';
 import * as THREE from 'three';
 import type { Flashcard } from './flashcards';
 import { BOOK_SPACING, BOOK_THICKNESS, VISIBLE_BOOK_COUNT, REPEAT_PREVIEW_REMAINING, PASSED_BOOK_CACHE_COUNT, advanceBookDrop, WALK_SPEED, deckIndex, currentBookIndex, isMovementTarget, adjacentStone } from './navigation';
@@ -21,10 +20,9 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   light.position.set(-3, 10, 8); scene.add(light);
   const resources = new Set<THREE.BufferGeometry | THREE.Material | THREE.Texture>();
   const keep = <T extends THREE.BufferGeometry | THREE.Material | THREE.Texture>(resource: T): T => { resources.add(resource); return resource; };
-  const wallTexture = keep(architectureTexture(true));
   const stone = keep(new THREE.MeshLambertMaterial({ color: '#477fa6' }));
   const trim = keep(new THREE.MeshLambertMaterial({ color: '#6698ba' }));
-  const wall = keep(new THREE.MeshBasicMaterial({ map: wallTexture, side: THREE.DoubleSide }));
+  const wall = keep(new THREE.MeshBasicMaterial({ color: '#dceaf4', side: THREE.DoubleSide }));
   // Keep the previous wallpaper width and scale its height by the change in
   // image aspect ratio. Anchor the cropped artwork at the vault spring line.
   const wallHeight = 11;
@@ -34,7 +32,6 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
     texture.repeat.set(1 / wallpaperScale, wallHeight / wallpaperHeight);
     texture.offset.set((1 - texture.repeat.x) / 2, 1 - texture.repeat.y);
   }
-  fitWallpaper(wallTexture);
   const parquet = createParquetFloor();
   const floor = parquet.mesh;
   scene.add(floor);
@@ -329,6 +326,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   const wallpaper = keep(new THREE.TextureLoader().load('/textures/nave-wall-water.jpg', texture => {
     if (disposed) { texture.dispose(); return; }
     wall.map = texture;
+    wall.color.set('#ffffff');
     wall.needsUpdate = true;
     invalidate();
   }));
