@@ -13,6 +13,11 @@ test.beforeEach(async ({ page }) => {
     }
   }
 });
+// Let verified proxy requests finish before Playwright closes the context.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'wait' });
+});
+
 async function createDeck(page: Page, title = 'Practice') {
   await page.route('https://en.wiktionary.org/**', r => r.fulfill({ json: { query: { pages: [] } } }));
   await page.goto('/files/new');
