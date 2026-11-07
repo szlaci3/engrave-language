@@ -1,0 +1,18 @@
+:root {
+  --color-bg: #07111f;
+  --color-surface: #0f1f33;
+  --color-surface-soft: #173451;
+
+  --color-primary: #38bdf8;
+  --color-primary-dark: #0284c7;
+  --color-primary-soft: #082f49;
+
+  --color-text: #f8fafc;
+  --color-text-muted: #cbd5e1;
+
+  --color-border: #2b5f87;
+  --color-focus: #7dd3fc;
+
+  --color-danger: #fb7185;
+  --color-success: #4ade80;
+}
