@@ -28,7 +28,7 @@ The main toolbar contains listening, Next, and continuous forward controls. Expa
 
 Import this repository in Netlify. `netlify.toml` selects Node 24, `npm run build`, and the `dist` publish directory. SPA redirects support direct deck URLs and refresh. No server, environment secrets, or database service is required. This repository is prepared for deployment; deploying the site is a separate Netlify action.
 
-The world texture is bundled locally. Downloaded audio uses Wiktionary/Wikimedia when selected, with browser speech fallback. Voice availability depends on the device. Serve over HTTPS for deployment.
+The world texture is bundled locally. Dutch audio defaults to Wiktionary/Wikimedia, with browser speech fallback; explicit saved audio-source choices are preserved. For Dutch Wiktionary lookups and preloading, leading “de ” or “het ” is removed internally, including capitalized articles. Displayed vocabulary and browser speech retain the full original text. Chinese audio keeps its existing source preference. Voice availability depends on the device. Serve over HTTPS for deployment.
 
 ## Check a deployed site
 

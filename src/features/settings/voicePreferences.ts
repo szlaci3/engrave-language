@@ -10,6 +10,8 @@ export type VoicePreferences = {
   chineseAudioTextSplitting?: boolean;
 };
 
+const defaultPreferences: VoicePreferences = { dutchAudioSource: 'wiktionary' };
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -28,14 +30,14 @@ export function getVoicePreferences(): VoicePreferences {
   const storedValue = window.localStorage.getItem(storageKey);
 
   if (!storedValue) {
-    return {};
+    return { ...defaultPreferences };
   }
 
   try {
     const parsed: unknown = JSON.parse(storedValue);
 
     if (!isRecord(parsed)) {
-      return {};
+      return { ...defaultPreferences };
     }
 
     const legacyAudioSource = toAudioSource(parsed.audioSource);
@@ -44,7 +46,7 @@ export function getVoicePreferences(): VoicePreferences {
       dutchVoiceURI: toOptionalString(parsed.dutchVoiceURI),
       chineseVoiceURI: toOptionalString(parsed.chineseVoiceURI),
       dutchAudioSource:
-        toAudioSource(parsed.dutchAudioSource) ?? legacyAudioSource,
+        toAudioSource(parsed.dutchAudioSource) ?? legacyAudioSource ?? defaultPreferences.dutchAudioSource,
       chineseAudioSource:
         toAudioSource(parsed.chineseAudioSource) ?? legacyAudioSource,
       chineseAudioTextSplitting:
@@ -53,7 +55,7 @@ export function getVoicePreferences(): VoicePreferences {
           : true,
     };
   } catch {
-    return {};
+    return { ...defaultPreferences };
   }
 }
 

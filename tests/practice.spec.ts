@@ -405,3 +405,70 @@ test('Next double click queues consecutive stone animations, capped at four, and
   await position(page, stopped);
   await page.clock.resume();
 });
+
+
+test('Dutch defaults to Wiktionary while an explicitly saved browser choice remains selected', async ({ page }) => {
+  await page.goto('/settings');
+  await expect(page.locator('#dutch-audio-source')).toHaveValue('wiktionary');
+  await expect(page.locator('#chinese-audio-source')).toHaveValue('speechSynthesis');
+  await page.locator('#dutch-audio-source').selectOption('speechSynthesis');
+  await page.locator('button[type=submit]').click();
+  await expect(page.locator('.form-message-success')).toBeVisible();
+  await page.reload();
+  await expect(page.locator('#dutch-audio-source')).toHaveValue('speechSynthesis');
+});
+
+test('Dutch article-free lookups are shared by preloading and playback without changing displayed or fallback text', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.addInitScript(() => {
+    const state = window as unknown as { spoken: string[]; played: string[] };
+    state.spoken = []; state.played = [];
+    Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: {
+      getVoices: () => [], cancel() {},
+      speak(utterance: SpeechSynthesisUtterance) { state.spoken.push(utterance.text); },
+    } });
+    Object.defineProperty(window, 'Audio', { configurable: true, value: class {
+      src: string;
+      constructor(src: string) { this.src = src; }
+      pause() {}
+      play() { state.played.push(this.src); return Promise.resolve(); }
+    } });
+  });
+  const entries = ['de tafel', 'het huis', 'DE boom', 'HET boek', 'deur', 'hetzelfde', 'de'];
+  const lookups: string[] = [];
+  await page.route('https://en.wiktionary.org/**', route => {
+    const title = new URL(route.request().url()).searchParams.get('page')!;
+    lookups.push(title);
+    return route.fulfill({
+      headers: { 'access-control-allow-origin': '*' },
+      json: title === 'tafel' ? { parse: { wikitext: '{{audio|nl|Nl-tafel.ogg}}' } } : { error: { code: 'missingtitle' } },
+    });
+  });
+  await page.route('https://commons.wikimedia.org/**', route => route.fulfill({
+    headers: { 'access-control-allow-origin': '*' }, contentType: 'audio/ogg', body: 'mock audio',
+  }));
+  await page.goto('/files/new');
+  await page.locator('textarea').fill(entries.map(text => `${text} 字`).join('\n'));
+  await page.locator('button[type=submit]').click();
+  await page.waitForURL(/\/flashcards$/);
+  await expect(page.locator('canvas')).toBeVisible();
+  await page.locator('[data-control=expand]').click();
+  await page.locator('[data-control=dutch]').click();
+  await expect(page.locator('.world-heading [role=status]')).toContainText('de tafel');
+  await page.locator('[data-control=listen-dutch]').click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { played: string[] }).played.length)).toBe(1);
+  expect(lookups).toEqual(['tafel']);
+  expect(await page.evaluate(() => (window as unknown as { spoken: string[] }).spoken)).toEqual([]);
+  // The deck view preloads the remaining words using exactly the same lookup normalization.
+  await page.goto(page.url().replace(/\/flashcards$/, ''));
+  const words = page.locator('.entry-dutch-button');
+  await expect(words).toHaveText(entries);
+  await expect.poll(() => [...new Set(lookups)].sort()).toEqual(['tafel', 'huis', 'boom', 'boek', 'deur', 'hetzelfde', 'de'].sort());
+  const lookupCount = lookups.length;
+  for (let i = 1; i < entries.length; i++) {
+    await words.nth(i).click();
+    await expect.poll(() => page.evaluate(() => (window as unknown as { spoken: string[] }).spoken)).toContain(entries[i]);
+  }
+  expect(lookups.length).toBe(lookupCount);
+  await expect(words).toHaveText(entries);
+});

@@ -119,7 +119,7 @@ export function SettingsPage() {
           <select
             id="dutch-audio-source"
             className="select-input"
-            value={preferences.dutchAudioSource ?? 'speechSynthesis'}
+            value={preferences.dutchAudioSource ?? 'wiktionary'}
             onChange={(event) =>
               setPreferences((currentPreferences) => ({
                 ...currentPreferences,

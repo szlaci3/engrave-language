@@ -78,11 +78,12 @@ function speakWithSpeechSynthesis(
   return true;
 }
 
-function normalizeLookupText(text: string) {
-  return text
+function normalizeLookupText(text: string, language: VoiceLanguage) {
+  const normalized = text
     .trim()
     .replace(/[。！？!?.,，、；;:：()[\]{}"“”'‘’]+$/u, '')
     .trim();
+  return language === 'dutch' ? normalized.replace(/^(?:de|het)\s+/iu, '') : normalized;
 }
 
 export function splitChineseAudioText(text: string) {
@@ -454,7 +455,7 @@ export function preloadLanguageAudio(text: string, language: VoiceLanguage) {
     return;
   }
 
-  const lookupText = normalizeLookupText(text);
+  const lookupText = normalizeLookupText(text, language);
 
   if (!lookupText) {
     return;
@@ -483,7 +484,7 @@ function playWiktionaryOrFallback(
   language: VoiceLanguage,
   options: PlayAudioOptions = {},
 ) {
-  const lookupText = normalizeLookupText(text);
+  const lookupText = normalizeLookupText(text, language);
 
   if (!lookupText) {
     return speakWithSpeechSynthesis(text, language, options);
