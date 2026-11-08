@@ -12,7 +12,7 @@ function formatLocalDate(date: Date) {
 }
 
 export function createBackupFilename(date = new Date()) {
-  return `wooord-backup-${formatLocalDate(date)}.json`;
+  return `engrave-language-backup-${formatLocalDate(date)}.json`;
 }
 
 export async function exportWooordDatabase(): Promise<WooordDatabaseExport> {
@@ -136,7 +136,7 @@ export function validateWooordDatabaseExport(
   }
 
   if (value.app !== 'wooord' || (value.version !== 1 && value.version !== 2)) {
-    throw new Error('Backup file is not a compatible wooord export.');
+    throw new Error('Backup file is not a compatible Engrave Language export.');
   }
 
   if (!isString(value.exportedAt) || !isRecord(value.data)) {
@@ -156,7 +156,7 @@ export function validateWooordDatabaseExport(
     !entries.every(isVocabularyEntry) ||
     !settings.every(isAppSetting)
   ) {
-    throw new Error('Backup file contains malformed wooord data.');
+    throw new Error('Backup file contains malformed Engrave Language data.');
   }
 
   assertUniqueIds(folders, 'folder');

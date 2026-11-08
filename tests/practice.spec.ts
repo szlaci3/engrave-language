@@ -472,3 +472,63 @@ test('Dutch article-free lookups are shared by preloading and playback without c
   expect(lookups.length).toBe(lookupCount);
   await expect(words).toHaveText(entries);
 });
+
+test('desktop WASD walking, queued steps and control order', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await createDeck(page);
+  await expect(page.locator('.world-heading a')).toHaveText('Engrave Language');
+  await expect(page.locator('[data-control=next] .world-key-hint')).toBeVisible();
+  await expandControls(page);
+  expect(await page.locator('.world-secondary-controls button').evaluateAll(buttons => buttons.map(button => button.getAttribute('data-control')))).toEqual(['previous', 'back', 'dutch', 'chinese']);
+  await page.keyboard.press('d');
+  await page.keyboard.press('d');
+  await position(page, 7.2);
+  await page.keyboard.press('a');
+  await position(page, 3.6);
+  await page.keyboard.down('w');
+  await expect.poll(async () => Number(await page.locator('.world-scene').getAttribute('data-position'))).toBeGreaterThan(4);
+  await page.keyboard.up('w');
+  await page.keyboard.down('s');
+  await expect.poll(async () => Number(await page.locator('.world-scene').getAttribute('data-position'))).toBeLessThan(3.6);
+  await page.keyboard.up('s');
+  await page.locator('[data-control=edit]').click();
+  const input = page.locator('dialog textarea').first();
+  await input.fill('');
+  await input.pressSequentially('wasd');
+  await expect(input).toHaveValue('wasd');
+});
+
+test('Dutch stones wrap before reducing the reference font size', async ({ page }) => {
+  await page.addInitScript(() => {
+    const draws: { text: string; font: string; width: number; available: number }[] = [];
+    Object.assign(window, { stoneTextDraws: draws });
+    const original = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, x, y, maxWidth) {
+      if (this.canvas.width === 1024) draws.push({ text, font: this.font, width: this.measureText(text).width, available: this.canvas.width - 150 });
+      original.call(this, text, x, y, ...(maxWidth === undefined ? [] : [maxWidth]));
+    };
+  });
+  const reference = 'Open de app op je smartphone';
+  const wrapped = 'Vandaag wandelen we samen door de mooie stad';
+  const long = 'Dit is een bijzonder lange Nederlandse zin met heel veel woorden die ook over twee regels nog kleiner moet worden om helemaal op de steen te passen';
+  await page.goto('/files/new');
+  await page.locator('#deck-title').fill('Readable Dutch');
+  await page.locator('textarea').fill(`${reference} 水\n${wrapped} 书\n${long} 世界`);
+  await page.locator('button[type=submit]').click();
+  await expect(page.locator('.world-scene')).toHaveAttribute('data-position', '0.0000');
+  await expect.poll(() => page.evaluate(text => (window as unknown as { stoneTextDraws: { text: string }[] }).stoneTextDraws.some(draw => draw.text === text), reference)).toBe(true);
+  const draws = await page.evaluate(() => (window as unknown as { stoneTextDraws: { text: string; font: string; width: number; available: number }[] }).stoneTextDraws);
+  const referenceDraw = draws.find(draw => draw.text === reference)!;
+  expect(referenceDraw).toBeTruthy();
+  const referenceSize = parseFloat(referenceDraw.font);
+  for (const [text, smaller] of [[wrapped, false], [long, true]] as const) {
+    const lines = draws.filter(draw => draw.text.length > 10 && text.includes(draw.text) && draw.text !== reference);
+    expect(lines).toHaveLength(2);
+    expect(lines.map(line => line.text).join(' ')).toBe(text);
+    for (const line of lines) {
+      expect(line.width).toBeLessThanOrEqual(line.available);
+      if (smaller) expect(parseFloat(line.font)).toBeLessThan(referenceSize);
+      else expect(parseFloat(line.font)).toBe(referenceSize);
+    }
+  }
+});

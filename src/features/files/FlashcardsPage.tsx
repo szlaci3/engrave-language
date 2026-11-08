@@ -145,7 +145,7 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
   return <main className="world-page">
     <div className="world-scene" ref={host} />
     <header className="world-heading">
-      <a href={routes.home}>engrave-language</a>
+      <a href={routes.home}>Engrave Language</a>
       <h1>{deck?.file.title ?? t('flashcards')}</h1>
       <p role="status" aria-live="polite">{loading ? t('loadingFlashcards') : `${Math.min(index + 1, stones.length)} / ${stones.length} · ${stones[index]?.title ?? ''}`}</p>
     </header>
@@ -156,10 +156,10 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
     {!!stones.length && <footer ref={dock} className={`world-dock${lowControls ? ' world-dock-low' : ''}`}>
       {expanded && <section className="world-options" id="world-options">
         <div className="world-controls world-secondary-controls">
+<button data-control="previous" title={t('previous')} aria-label={t('previous')} disabled={fallback && index === 0} onClick={() => step(-1)}><Icon name="previous" /><small className="world-key-hint">a</small></button>
+<button data-control="back" title={label('Hold to walk back', '按住后退')} aria-label={label('Hold to walk back', '按住后退')} disabled={fallback} onPointerDown={e => hold(e, -1)} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop} onContextMenu={e => e.preventDefault()}><Icon name="back" /><small className="world-key-hint">s</small></button>
 <button data-control="dutch" title={label('Dutch first', '荷兰语优先')} aria-label={label('Dutch first', '荷兰语优先')} aria-pressed={first === 'nl'} onClick={() => { setFirst('nl'); if (fallback) setIndex(0); }}>NL</button>
 <button data-control="chinese" title={label('Chinese first', '中文优先')} aria-label={label('Chinese first', '中文优先')} aria-pressed={first === 'zh'} onClick={() => { setFirst('zh'); if (fallback) setIndex(0); }}>中</button>
-<button data-control="previous" title={t('previous')} aria-label={t('previous')} disabled={fallback && index === 0} onClick={() => step(-1)}><Icon name="previous" /></button>
-<button data-control="back" title={label('Hold to walk back', '按住后退')} aria-label={label('Hold to walk back', '按住后退')} disabled={fallback} onPointerDown={e => hold(e, -1)} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop} onContextMenu={e => e.preventDefault()}><Icon name="back" /></button>
         </div>
         <div className="world-option-actions">
           <button className="secondary-action" data-control="edit" onClick={edit}>{label('Edit', '编辑')}</button>
@@ -172,8 +172,8 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
       <nav className="world-controls world-primary-controls" aria-label={label('Practice controls', '学习控制')}>
 <button data-control="listen-chinese" title={label('Listen Chinese', '听中文')} aria-label={label('Listen Chinese', '听中文')} onClick={() => listen('zh')}><Icon name="audio" /><small>中</small></button>
 <button data-control="listen-dutch" title={label('Listen Dutch', '听荷兰语')} aria-label={label('Listen Dutch', '听荷兰语')} onClick={() => listen('nl')}><Icon name="audio" /><small>NL</small></button>
-<button data-control="next" title={t('next')} aria-label={t('next')} onClick={() => step(1)}><Icon name="next" /></button>
-<button data-control="forward" title={label('Hold to walk forward', '按住前进')} aria-label={label('Hold to walk forward', '按住前进')} disabled={fallback} onPointerDown={e => hold(e, 1)} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop} onContextMenu={e => e.preventDefault()}><Icon name="forward" /></button>
+<button data-control="next" title={t('next')} aria-label={t('next')} onClick={() => step(1)}><Icon name="next" /><small className="world-key-hint">d</small></button>
+<button data-control="forward" title={label('Hold to walk forward', '按住前进')} aria-label={label('Hold to walk forward', '按住前进')} disabled={fallback} onPointerDown={e => hold(e, 1)} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop} onContextMenu={e => e.preventDefault()}><Icon name="forward" /><small className="world-key-hint">w</small></button>
 <button data-control="expand" title={label('More controls', '更多控制')} aria-label={label('More controls', '更多控制')} aria-expanded={expanded} aria-controls="world-options" onClick={() => { scene.current?.stop(); setExpanded(!expanded); }}><Icon name="expand" /></button>
       </nav>
     </footer>}

@@ -9,7 +9,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.setClearColor('#dceaf4');
-  renderer.domElement.setAttribute('aria-label', 'One row of Chinese and Dutch stone flashcards. Use Up to walk forward, Down to walk backward.');
+  renderer.domElement.setAttribute('aria-label', 'One row of Chinese and Dutch stone flashcards. Hold W or Up to walk forward, S or Down to walk backward. Press D for next, A for previous.');
   renderer.domElement.setAttribute('role', 'img');
   host.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
@@ -195,15 +195,41 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
     let fontSize = chinese ? 138 : 110;
     const font = () => `${fontSize}px "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif`;
     ctx.font = font();
-    while (fontSize > 28 && ctx.measureText(book.title).width > width - 150) { fontSize -= 4; ctx.font = font(); }
-    const lines: string[] = []; let line = '';
-    for (const character of book.title) {
-      if (ctx.measureText(line + character).width > width - 150 && line) { lines.push(line); line = ''; }
-      line += character;
+    const maxWidth = width - 150;
+    let shown: string[];
+    if (!chinese) {
+      // Match the existing single-line size of the sentence in the reference screenshot.
+      const reference = 'Open de app op je smartphone';
+      while (fontSize > 28 && ctx.measureText(reference).width > maxWidth) { fontSize -= 4; ctx.font = font(); }
+      const minimum = fontSize;
+      fontSize = 110; ctx.font = font();
+      while (fontSize > minimum && ctx.measureText(book.title).width > maxWidth) { fontSize -= 4; ctx.font = font(); }
+      shown = [book.title];
+      if (ctx.measureText(book.title).width > maxWidth) {
+        // Prefer word boundaries; split a single oversized word only when necessary.
+        const text = book.title.trim();
+        const characters = Array.from(text);
+        const wordBreaks = characters.flatMap((char, i) => /\s/.test(char) ? [i] : []);
+        const breaks = wordBreaks.length ? wordBreaks : characters.slice(1).map((_, i) => i + 1);
+        let bestWidth = Infinity;
+        for (const split of breaks) {
+          const lines = [characters.slice(0, split).join('').trim(), characters.slice(split).join('').trim()];
+          const measured = Math.max(...lines.map(line => ctx.measureText(line).width));
+          if (measured < bestWidth) { bestWidth = measured; shown = lines; }
+        }
+        while (fontSize > 1 && shown.some(line => ctx.measureText(line).width > maxWidth)) { fontSize -= 1; ctx.font = font(); }
+      }
+    } else {
+      while (fontSize > 28 && ctx.measureText(book.title).width > maxWidth) { fontSize -= 4; ctx.font = font(); }
+      const lines: string[] = []; let line = '';
+      for (const character of book.title) {
+        if (ctx.measureText(line + character).width > maxWidth && line) { lines.push(line); line = ''; }
+        line += character;
+      }
+      if (line) lines.push(line);
+      shown = lines.slice(0, 5);
+      if (lines.length > 5) shown[4] = shown[4].slice(0, -1) + '…';
     }
-    if (line) lines.push(line);
-    const shown = lines.slice(0, 5);
-    if (lines.length > 5) shown[4] = shown[4].slice(0, -1) + '…';
     shown.forEach((text, i) => ctx.fillText(text, width / 2, height * .61 + (i - (shown.length - 1) / 2) * fontSize * 1.15));
     const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; return texture;
   };
@@ -288,7 +314,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
     frame = 0;
     const delta = previousTime ? Math.min((time - previousTime) / 1000, .15) : 0;
     previousTime = time;
-    const keyboardDirection = Number(heldKeys.has('arrowup')) - Number(heldKeys.has('arrowdown'));
+    const keyboardDirection = Number(heldKeys.has('arrowup') || heldKeys.has('w')) - Number(heldKeys.has('arrowdown') || heldKeys.has('s'));
     const movement = direction || keyboardDirection;
     if (target !== null) {
       const step = WALK_SPEED * 2 * delta;
@@ -303,10 +329,24 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
     if (canContinue || animating || target !== null) frame = requestAnimationFrame(tick); else previousTime = 0;
   }
   function invalidate() { if (!disposed && !frame) frame = requestAnimationFrame(tick); }
+  function step(value: number) {
+      heldKeys.clear(); direction = 0;
+      if (!books.length) return;
+      if (target === null) target = adjacentStone(position, value);
+      else if (queuedTargets.length < MAX_STEP_COUNT - 1) {
+        // Plan from the last requested stop, so every click advances one stone.
+        queuedTargets.push(adjacentStone(queuedTargets.at(-1) ?? target, value));
+      }
+      invalidate();
+    }
   const keydown = (event: KeyboardEvent) => {
     const key = event.key.toLowerCase();
-    if (event.altKey || event.ctrlKey || event.metaKey || isMovementTarget(event.target) || !['arrowup', 'arrowdown'].includes(key)) return;
-    event.preventDefault(); target = null; queuedTargets.length = 0; heldKeys.add(key); invalidate();
+    const typing = event.target instanceof HTMLElement && Boolean(event.target.closest('input, textarea, select, [contenteditable], [role=dialog], dialog'));
+    const blocked = ['w', 's', 'a', 'd'].includes(key) ? typing : isMovementTarget(event.target);
+    if (event.altKey || event.ctrlKey || event.metaKey || blocked || !['arrowup', 'arrowdown', 'w', 's', 'a', 'd'].includes(key)) return;
+    event.preventDefault();
+    if (key === 'a' || key === 'd') { if (!event.repeat) step(key === 'd' ? 1 : -1); return; }
+    target = null; queuedTargets.length = 0; heldKeys.add(key); invalidate();
   };
   const keyup = (event: KeyboardEvent) => { heldKeys.delete(event.key.toLowerCase()); };
   const stop = () => { heldKeys.clear(); direction = 0; target = null; queuedTargets.length = 0; };
@@ -344,16 +384,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
       invalidate();
     },
     move(value: number) { target = null; queuedTargets.length = 0; direction = value; invalidate(); },
-    step(value: number) {
-      heldKeys.clear(); direction = 0;
-      if (!books.length) return;
-      if (target === null) target = adjacentStone(position, value);
-      else if (queuedTargets.length < MAX_STEP_COUNT - 1) {
-        // Plan from the last requested stop, so every click advances one stone.
-        queuedTargets.push(adjacentStone(queuedTargets.at(-1) ?? target, value));
-      }
-      invalidate();
-    },
+    step,
     setSpeed(value: number) { speed = Math.max(.25, Math.min(3, value)); },
     stop,
 

@@ -210,7 +210,7 @@ export function FileListPage() {
     <main className="app-shell">
       <section className="home-panel" aria-labelledby="app-title">
         <p className="eyebrow">{t('appEyebrow')}</p>
-        <h1 id="app-title">wooord</h1>
+        <h1 id="app-title">Engrave Language</h1>
         <p className="intro">{t('appIntro')}</p>
 
         <nav className="quick-actions" aria-label={t('primaryNavigation')}>

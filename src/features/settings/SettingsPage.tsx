@@ -75,7 +75,7 @@ export function SettingsPage() {
     <main className="app-shell">
       <header className="page-header">
         <a className="back-link" href={routes.home}>
-          wooord
+          Engrave Language
         </a>
         <p className="eyebrow">{t('settings')}</p>
       </header>

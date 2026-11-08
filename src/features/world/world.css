@@ -32,3 +32,8 @@
 .world-secondary-controls { background: transparent; border: 0; box-shadow: none; padding: 0; }
 .world-option-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .world-option-actions > * { flex: 1 1 100px; padding: 8px 12px; min-height: 44px; cursor: pointer; }
+
+.world-controls .world-key-hint { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .world-controls .world-key-hint { display: block; }
+}
