@@ -223,6 +223,7 @@ export function FileListPage() {
           <a className="secondary-action" href={routes.settings}>
             {t('settings')}
           </a>
+          <a className="secondary-action" href={routes.speedRun}>Speed Run</a>
         </nav>
       </section>
 

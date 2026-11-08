@@ -1,3 +1,4 @@
+import { liveQuery } from 'dexie';
 import { useAudioAutoplay } from './useAudioAutoplay';
 import { usePracticeCompletion } from './usePracticeCompletion';
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
@@ -60,6 +61,10 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
   useAudioAutoplay(`${fileId}:${index}:${first}`, index % 2 === 0 ? 'front' : 'back',
     !editing && (ready || fallback) ? stones[index]?.title ?? '' : '', stones[index]?.language ?? 'zh');
 
+  useEffect(() => {
+    const subscription = liveQuery(() => getVocabularyFile(fileId)).subscribe(value => setDeck(value));
+    return () => subscription.unsubscribe();
+  }, [fileId]);
   useEffect(() => {
     let active = true;
     Promise.all([getVocabularyFile(fileId), getLowControls()]).then(([value, low]) => { if (active) { setDeck(value); setLowControls(low); setLoading(false); } })

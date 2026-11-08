@@ -1,3 +1,4 @@
+import { liveQuery } from 'dexie';
 import { useAudioAutoplay } from './useAudioAutoplay';
 import { usePracticeCompletion } from './usePracticeCompletion';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -56,6 +57,10 @@ export function FlatFlashcardsPage({ fileId }: FlashcardsPageProps) {
   const nextChinesePartByEntryId = useRef(new Map<string, number>());
 
 
+  useEffect(() => {
+    const subscription = liveQuery(() => getVocabularyFile(fileId)).subscribe(value => setFileData(value));
+    return () => subscription.unsubscribe();
+  }, [fileId]);
   useEffect(() => {
     let isMounted = true;
 

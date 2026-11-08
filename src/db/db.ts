@@ -1,3 +1,4 @@
+import type { Progress } from '../features/speedRun/model';
 import Dexie, { type Table } from 'dexie';
 import type {
   Folder,
@@ -11,6 +12,7 @@ export class WooordDatabase extends Dexie {
   files!: Table<VocabularyFile, string>;
   entries!: Table<VocabularyEntry, string>;
   settings!: Table<AppSetting, string>;
+  progress!: Table<Progress, string>;
 
   constructor() {
     super('wooord-db');
@@ -20,6 +22,8 @@ export class WooordDatabase extends Dexie {
       files: 'id, title, folderId, createdAt, updatedAt',
       entries: 'id, fileId, order',
     });
+
+    this.version(3).stores({ progress: 'id, entryId, direction' });
 
     this.version(2).stores({
       folders: 'id, name, createdAt, updatedAt',

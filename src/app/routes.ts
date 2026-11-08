@@ -1,5 +1,6 @@
 export const routes = {
   home: '/',
+  speedRun: '/speed-run',
   newFile: '/files/new',
   data: '/data',
   settings: '/settings',
@@ -11,6 +12,7 @@ export const routes = {
 
 export type AppRoute =
   | { name: 'home' }
+  | { name: 'speedRun' }
   | { name: 'newFile' }
   | { name: 'data' }
   | { name: 'settings' }
@@ -20,6 +22,7 @@ export type AppRoute =
   | { name: 'folder'; folderId: string };
 
 export function getCurrentRoute(pathname: string): AppRoute {
+  if (pathname === routes.speedRun) return { name: 'speedRun' };
   if (pathname === routes.newFile) {
     return { name: 'newFile' };
   }

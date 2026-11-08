@@ -1,3 +1,4 @@
+import type { Progress } from '../speedRun/model';
 import { db } from '../../db/db';
 import type { WooordDatabaseExport } from './types';
 import type { Folder, VocabularyEntry, VocabularyFile } from '../files/types';
@@ -16,22 +17,24 @@ export function createBackupFilename(date = new Date()) {
 }
 
 export async function exportWooordDatabase(): Promise<WooordDatabaseExport> {
-  const [folders, files, entries, settings] = await Promise.all([
+  const [folders, files, entries, settings, progress] = await Promise.all([
     db.folders.toArray(),
     db.files.toArray(),
     db.entries.toArray(),
     db.settings.toArray(),
+    db.progress.toArray(),
   ]);
 
   return {
     app: 'wooord',
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     data: {
       folders,
       files,
       entries,
       settings,
+      progress,
     },
   };
 }
@@ -104,6 +107,13 @@ function isAppSetting(value: unknown): value is AppSetting {
   );
 }
 
+function isProgress(value: unknown): value is Progress {
+  return isRecord(value) && isString(value.id) && isString(value.entryId) &&
+    (value.direction === 'zh-nl' || value.direction === 'nl-zh') &&
+    value.id === `${value.entryId}:${value.direction}` && isString(value.lastPracticed) &&
+    [value.correct, value.mistakes, value.unanswered].every(count => typeof count === 'number' && Number.isSafeInteger(count) && count >= 0);
+}
+
 function assertUniqueIds(records: { id: string }[], label: string) {
   const ids = new Set<string>();
 
@@ -135,7 +145,7 @@ export function validateWooordDatabaseExport(
     throw new Error('Backup file must contain a JSON object.');
   }
 
-  if (value.app !== 'wooord' || (value.version !== 1 && value.version !== 2)) {
+  if (value.app !== 'wooord' || (value.version !== 1 && value.version !== 2 && value.version !== 3)) {
     throw new Error('Backup file is not a compatible Engrave Language export.');
   }
 
@@ -144,13 +154,16 @@ export function validateWooordDatabaseExport(
   }
 
   const { folders, files, entries } = value.data;
-  const settings = value.version === 2 ? value.data.settings : [];
+  const progress = value.version === 3 ? value.data.progress : [];
+  const settings = value.version !== 1 ? value.data.settings : [];
 
   if (
     !Array.isArray(folders) ||
     !Array.isArray(files) ||
     !Array.isArray(entries) ||
     !Array.isArray(settings) ||
+    !Array.isArray(progress) ||
+    !progress.every(isProgress) ||
     !folders.every(isFolder) ||
     !files.every(isVocabularyFile) ||
     !entries.every(isVocabularyEntry) ||
@@ -163,6 +176,9 @@ export function validateWooordDatabaseExport(
   assertUniqueIds(files, 'file');
   assertUniqueIds(entries, 'entry');
   assertUniqueKeys(settings, 'setting');
+  assertUniqueIds(progress, 'progress');
+  const entryIds = new Set(entries.map(entry => entry.id));
+  if (progress.some(record => !entryIds.has(record.entryId))) throw new Error('Progress refers to an unknown card.');
 
   const folderIds = new Set(folders.map((folder) => folder.id));
   const fileIds = new Set(files.map((file) => file.id));
@@ -188,6 +204,7 @@ export function validateWooordDatabaseExport(
       files,
       entries,
       settings,
+      progress,
     },
   };
 }
@@ -205,11 +222,13 @@ export async function readWooordExportFile(file: File) {
 }
 
 export async function replaceWooordDatabase(backup: WooordDatabaseExport) {
-  await db.transaction('rw', db.folders, db.files, db.entries, db.settings, async () => {
+  await db.transaction('rw', db.folders, db.files, db.entries, db.settings, db.progress, async () => {
     await db.entries.clear();
     await db.files.clear();
     await db.folders.clear();
     await db.settings.clear();
+    await db.progress.clear();
+    if (backup.data.progress?.length) await db.progress.bulkAdd(backup.data.progress);
 
     if (backup.data.folders.length > 0) {
       await db.folders.bulkAdd(backup.data.folders);
@@ -245,7 +264,7 @@ function createUniqueId(existingIds: Set<string>) {
 }
 
 export async function mergeWooordDatabase(backup: WooordDatabaseExport) {
-  await db.transaction('rw', db.folders, db.files, db.entries, async () => {
+  await db.transaction('rw', db.folders, db.files, db.entries, db.progress, async () => {
     const [existingFolders, existingFiles, existingEntries] =
       await Promise.all([
         db.folders.toArray(),
@@ -279,11 +298,16 @@ export async function mergeWooordDatabase(backup: WooordDatabaseExport) {
       };
     });
 
-    const entries = backup.data.entries.map((entry) => ({
-      ...entry,
-      id: createUniqueId(entryIds),
-      fileId: fileIdMap.get(entry.fileId) ?? entry.fileId,
-    }));
+    const entryIdMap = new Map<string, string>();
+    const entries = backup.data.entries.map(entry => {
+      const id = createUniqueId(entryIds); entryIdMap.set(entry.id, id);
+      return { ...entry, id, fileId: fileIdMap.get(entry.fileId) ?? entry.fileId };
+    });
+    const progress = (backup.data.progress ?? []).map(record => {
+      const entryId = entryIdMap.get(record.entryId)!;
+      return { ...record, entryId, id: `${entryId}:${record.direction}` };
+    });
+    if (progress.length) await db.progress.bulkAdd(progress);
 
     if (folders.length > 0) {
       await db.folders.bulkAdd(folders);

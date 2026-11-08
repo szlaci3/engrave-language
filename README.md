@@ -39,3 +39,18 @@ ENGRAVE_TEST_URL=https://engrave-l.netlify.app node_modules/.bin/playwright test
 ```
 
 In the managed cloud environment, also set `ENGRAVE_TEST_PROXY="$HTTPS_PROXY"`. The test request layer uses the configured CA with TLS verification enabled. The hostname must be allowed by the environment network policy. Tests use disposable browser contexts and mock Wiktionary responses; they check the deployed application, not live audio delivery or voice availability.
+
+### Speed Run
+
+Open Speed Run after Settings, tap decks to select them, choose the prompt language,
+and press Play. A/D and Left/Right arrows select answers on desktop; tap stones on
+mobile. The aisle moves continuously at adjustable speed. There is no round timer.
+Unanswered questions count separately from mistakes. At the end of the selected
+material, the run displays “Endline - Starting again” and shuffles another lap.
+
+`SPEED_RUN_TRIO_SPACING = 25.2` world units (7 × normal 3.6-unit spacing) and
+`GHOST_SECONDS = 2` are in `src/features/speedRun/model.ts`. Feedback trios freeze
+relative to the camera at 50% opacity, then fall away. Progress is saved by stable
+card ID and language direction in Dexie and included in version 3 backups. Older
+backups remain importable. Deck editing now changes only the title; edit vocabulary
+pairs in 3D review to retain their IDs and history.

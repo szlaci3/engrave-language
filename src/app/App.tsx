@@ -1,3 +1,4 @@
+import { SpeedRunPage } from '../features/speedRun/SpeedRunPage';
 import { getCurrentRoute } from './routes';
 import { FileListPage } from '../features/files/FileListPage';
 import { FileViewPage } from '../features/files/FileViewPage';
@@ -11,6 +12,7 @@ import { SettingsPage } from '../features/settings/SettingsPage';
 function App() {
   const currentRoute = getCurrentRoute(window.location.pathname);
 
+  if (currentRoute.name === 'speedRun') return <SpeedRunPage />;
   if (currentRoute.name === 'newFile') {
     return <NewFilePage />;
   }

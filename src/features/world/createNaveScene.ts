@@ -5,11 +5,11 @@ import { BOOK_SPACING, BOOK_THICKNESS, VISIBLE_BOOK_COUNT, REPEAT_PREVIEW_REMAIN
 
 const MAX_STEP_COUNT = 4;
 
-export function createNaveScene(host: HTMLElement, onCurrent: (index: number) => void, onError: () => void, onComplete: () => void) {
+export function createNaveScene(host: HTMLElement, onCurrent: (index: number) => void, onError: () => void, onComplete: () => void, sceneryOnly = false) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.setClearColor('#dceaf4');
-  renderer.domElement.setAttribute('aria-label', 'One row of Chinese and Dutch stone flashcards. Hold W or Up to walk forward, S or Down to walk backward. Press D for next, A for previous.');
+  renderer.domElement.setAttribute('aria-label', sceneryOnly ? 'Continuously moving water aisle.' : 'One row of Chinese and Dutch stone flashcards. Hold W or Up to walk forward, S or Down to walk backward. Press D for next, A for previous.');
   renderer.domElement.setAttribute('role', 'img');
   host.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
@@ -356,6 +356,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
       invalidate();
     }
   const keydown = (event: KeyboardEvent) => {
+    if (sceneryOnly) return;
     const key = event.key.toLowerCase();
     const typing = event.target instanceof HTMLElement && Boolean(event.target.closest('input, textarea, select, [contenteditable], [role=dialog], dialog'));
     const blocked = ['w', 's', 'a', 'd'].includes(key) ? typing : isMovementTarget(event.target);
@@ -394,6 +395,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   wallpaper.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
   observer.observe(host); invalidate();
   return {
+    tour(distance: number) { position = distance; render(0); },
     update(next: Flashcard[], reset: boolean) {
       clearBooks(); books = next;
       if (reset) { position = 0; current = Number.NaN; stop(); }

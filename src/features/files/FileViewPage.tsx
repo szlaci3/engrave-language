@@ -1,9 +1,8 @@
 import { DeckStudyLinks } from './DeckStudyLinks';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { routes } from '../../app/routes';
 import {
   getVocabularyFile,
-  listFolders,
   updateVocabularyFile,
 } from '../../db/vocabularyRepository';
 import { useUiLanguage } from '../settings/uiLanguage';
@@ -11,9 +10,8 @@ import {
   getChineseAudioTextParts,
   preloadVocabularyAudios,
 } from './audioService';
-import { parseVocabulary } from './parseVocabulary';
 import { speakChinese, speakDutch } from './speech';
-import type { Folder, VocabularyFileWithEntries } from './types';
+import type { VocabularyFileWithEntries } from './types';
 
 type FileViewPageProps = {
   fileId: string;
@@ -58,12 +56,6 @@ function SaveIcon() {
   );
 }
 
-function entriesToRawText(fileData: VocabularyFileWithEntries) {
-  return fileData.entries
-    .map((entry) => `${entry.dutch}  ${entry.chinese}`)
-    .join('\n');
-}
-
 export function FileViewPage({ fileId }: FileViewPageProps) {
   const { t } = useUiLanguage();
   const [fileData, setFileData] = useState<VocabularyFileWithEntries | null>(
@@ -72,30 +64,22 @@ export function FileViewPage({ fileId }: FileViewPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [folders, setFolders] = useState<Folder[]>([]);
   const [titleDraft, setTitleDraft] = useState('');
-  const [folderDraft, setFolderDraft] = useState('');
-  const [rawDraft, setRawDraft] = useState('');
   const [message, setMessage] = useState('');
   const [activeAudioId, setActiveAudioId] = useState<string | null>(null);
   const nextChinesePartByEntryId = useRef(new Map<string, number>());
   const [listenedEntryIds, setListenedEntryIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const parsedDraft = useMemo(() => parseVocabulary(rawDraft), [rawDraft]);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadFile() {
-      const [savedFile, loadedFolders] = await Promise.all([
-        getVocabularyFile(fileId),
-        listFolders(),
-      ]);
+      const savedFile = await getVocabularyFile(fileId);
 
       if (isMounted) {
         setFileData(savedFile);
-        setFolders(loadedFolders);
         setIsLoading(false);
         setIsEditing(false);
         setMessage('');
@@ -119,8 +103,6 @@ export function FileViewPage({ fileId }: FileViewPageProps) {
     }
 
     setTitleDraft(fileData.file.title);
-    setFolderDraft(fileData.file.folderId ?? '');
-    setRawDraft(entriesToRawText(fileData));
     setMessage('');
     setIsEditing(true);
   }
@@ -135,19 +117,12 @@ export function FileViewPage({ fileId }: FileViewPageProps) {
       return;
     }
 
-    if (parsedDraft.entries.length === 0) {
-      setMessage(t('keepValidLine'));
-      return;
-    }
-
     setIsSaving(true);
     setMessage('');
 
     try {
       const updatedFile = await updateVocabularyFile(fileData.file.id, {
         title: titleDraft.trim(),
-        folderId: folderDraft || null,
-        entries: parsedDraft.entries,
       });
 
       if (!updatedFile) {
@@ -269,47 +244,7 @@ export function FileViewPage({ fileId }: FileViewPageProps) {
 
             {message ? <p className="form-message">{message}</p> : null}
 
-            {isEditing ? (
-              <div className="edit-fields">
-                <div className="edit-content-field">
-                  <label className="field-label" htmlFor="file-folder">
-                    {t('folder')}
-                  </label>
-                  <select
-                    id="file-folder"
-                    className="select-input"
-                    value={folderDraft}
-                    onChange={(event) => setFolderDraft(event.target.value)}
-                  >
-                    <option value="">{t('noFolder')}</option>
-                    {folders.map((folder) => (
-                      <option key={folder.id} value={folder.id}>
-                        {folder.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="edit-content-field">
-                  <label className="field-label" htmlFor="file-content">
-                    {t('vocabularyText')}
-                  </label>
-                  <textarea
-                    id="file-content"
-                    className="vocabulary-textarea"
-                    value={rawDraft}
-                    onChange={(event) => setRawDraft(event.target.value)}
-                    rows={12}
-                  />
-                  <p className="form-hint" aria-live="polite">
-                    {t('validLines', {
-                      count: parsedDraft.entries.length,
-                      skipped: parsedDraft.skippedLines.length,
-                    })}
-                  </p>
-                </div>
-              </div>
-            ) : (
+            {isEditing ? null : (
               <>
                 <DeckStudyLinks fileId={fileData.file.id} />
 

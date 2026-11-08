@@ -20,7 +20,6 @@ export type CreateVocabularyFileInput = {
 export type UpdateVocabularyFileInput = {
   title?: string;
   folderId?: string | null;
-  entries?: CreateVocabularyEntryInput[];
 };
 
 function createId() {
@@ -157,16 +156,6 @@ export async function updateVocabularyFile(
     };
 
     await db.files.put(updatedFile);
-
-    if (input.entries) {
-      const updatedEntries = toVocabularyEntries(fileId, input.entries);
-
-      await db.entries.where('fileId').equals(fileId).delete();
-
-      if (updatedEntries.length > 0) {
-        await db.entries.bulkAdd(updatedEntries);
-      }
-    }
 
     const entries = await db.entries
       .where('fileId')
