@@ -532,3 +532,34 @@ test('Dutch stones dynamically size up to three lines', async ({ page }) => {
     }
   }
 });
+
+for (const mode of ['off', 'front', 'back', 'both']) {
+  test(`audio autoplay ${mode} persists and applies to both practice views`, async ({ page }) => {
+    await page.addInitScript(() => {
+      const spoken: string[] = [];
+      Object.assign(window, { spoken });
+      window.speechSynthesis.speak = utterance => { spoken.push(utterance.text); };
+      window.speechSynthesis.cancel = () => {};
+    });
+    await createDeck(page);
+    const worldUrl = page.url();
+    await page.goto('/settings');
+    await page.locator('#audio-autoplay').selectOption(mode);
+    await page.locator('#dutch-audio-source').selectOption('speechSynthesis');
+    await page.locator('button[type=submit]').click();
+    await page.reload();
+    await expect(page.locator('#audio-autoplay')).toHaveValue(mode);
+    for (const suffix of ['', '/2d']) {
+      await page.goto(worldUrl + suffix);
+      const spoken = () => page.evaluate(() => (window as unknown as { spoken: string[] }).spoken);
+      if (suffix) await expect(page.locator('.flashcard-card')).toBeVisible();
+      else await expect(page.locator('canvas')).toBeVisible();
+      if (mode === 'front' || mode === 'both') await expect.poll(spoken).toEqual(['水']);
+      else expect(await spoken()).toEqual([]);
+      if (suffix) await page.locator('.flashcard-card').click();
+      else { await page.locator('[data-control=next]').click(); await position(page, 3.6); }
+      const expected = mode === 'both' ? ['水', 'water'] : mode === 'front' ? ['水'] : mode === 'back' ? ['water'] : [];
+      await expect.poll(spoken).toEqual(expected);
+    }
+  });
+}

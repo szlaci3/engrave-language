@@ -1,3 +1,4 @@
+import { useAudioAutoplay } from './useAudioAutoplay';
 import { usePracticeCompletion } from './usePracticeCompletion';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { routes } from '../../app/routes';
@@ -53,7 +54,7 @@ export function FlatFlashcardsPage({ fileId }: FlashcardsPageProps) {
   const [message, setMessage] = useState('');
   const [activeAudioId, setActiveAudioId] = useState<string | null>(null);
   const nextChinesePartByEntryId = useRef(new Map<string, number>());
-  const lastAutoPlayedPromptKey = useRef<string | null>(null);
+
 
   useEffect(() => {
     let isMounted = true;
@@ -189,31 +190,12 @@ export function FlatFlashcardsPage({ fileId }: FlashcardsPageProps) {
     }
   }, [currentEntry, direction, finishAudio, playChineseFlashcardAudio]);
 
-  useEffect(() => {
-    if (!currentEntry) {
-      return;
-    }
-
-    const promptKey = [
-      fileId,
-      currentEntry.id,
-      direction,
-      promptPresentationSequence,
-    ].join(':');
-
-    if (lastAutoPlayedPromptKey.current === promptKey) {
-      return;
-    }
-
-    lastAutoPlayedPromptKey.current = promptKey;
-    playPromptAudio();
-  }, [
-    currentEntry,
-    direction,
-    fileId,
-    playPromptAudio,
-    promptPresentationSequence,
-  ]);
+  useAudioAutoplay(
+    `${fileId}:${currentIndex}:${promptPresentationSequence}:${direction}`,
+    isRevealed ? 'back' : 'front',
+    currentEntry ? (isRevealed ? getBackText(currentEntry, direction) : getFrontText(currentEntry, direction)) : '',
+    (direction === 'dutch-to-chinese') !== isRevealed ? 'nl' : 'zh',
+  );
 
   function playAnswerAudio() {
     if (!currentEntry) {

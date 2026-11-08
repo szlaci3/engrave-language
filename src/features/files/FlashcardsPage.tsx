@@ -1,3 +1,4 @@
+import { useAudioAutoplay } from './useAudioAutoplay';
 import { usePracticeCompletion } from './usePracticeCompletion';
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { routes } from '../../app/routes';
@@ -56,6 +57,8 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
     return first === 'zh' ? pair : pair.reverse();
   }), [deck, first]);
   const entry = deck?.entries[Math.floor(index / 2)];
+  useAudioAutoplay(`${fileId}:${index}:${first}`, index % 2 === 0 ? 'front' : 'back',
+    !editing && (ready || fallback) ? stones[index]?.title ?? '' : '', stones[index]?.language ?? 'zh');
 
   useEffect(() => {
     let active = true;

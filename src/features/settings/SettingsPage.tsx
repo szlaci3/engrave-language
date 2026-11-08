@@ -4,6 +4,7 @@ import {
   getVoicePreferences,
   saveVoicePreferences,
   type VoicePreferences,
+  type AudioAutoplay,
 } from './voicePreferences';
 import { useUiLanguage } from './uiLanguage';
 import { listLanguageVoices } from './voiceSelection';
@@ -226,6 +227,18 @@ export function SettingsPage() {
             <option value="original">{t('originalChineseAudioText')}</option>
           </select>
           <small>{t('chineseAudioTextHandlingHint')}</small>
+        </label>
+
+        <label className="settings-field" htmlFor="audio-autoplay">
+          <span><span className="setting-number">7.</span> {language === 'zh' ? '自动播放音频' : 'Audio autoplay'}</span>
+          <select id="audio-autoplay" className="select-input" value={preferences.audioAutoplay ?? 'off'}
+            onChange={event => setPreferences(current => ({ ...current, audioAutoplay: event.target.value as AudioAutoplay }))}>
+            <option value="off">{language === 'zh' ? '关闭' : 'Off'}</option>
+            <option value="front">{language === 'zh' ? '仅正面' : 'Front only'}</option>
+            <option value="back">{language === 'zh' ? '仅背面' : 'Back only'}</option>
+            <option value="both">{language === 'zh' ? '正面和背面' : 'Front and back'}</option>
+          </select>
+          <small>{language === 'zh' ? '适用于二维和三维练习。正面是每组的第一种语言，背面是第二种语言。显示所选面时播放音频。' : 'Applies to 2D and 3D practice. Front is the first language in each pair; back is the second. Audio plays when the selected side appears.'}</small>
         </label>
 
         <button className="data-action-button" type="submit">

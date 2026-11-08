@@ -2,7 +2,10 @@ const storageKey = 'wooord.voicePreferences';
 
 export type AudioSource = 'speechSynthesis' | 'wiktionary';
 
+export type AudioAutoplay = 'off' | 'front' | 'back' | 'both';
+
 export type VoicePreferences = {
+  audioAutoplay?: AudioAutoplay;
   dutchVoiceURI?: string;
   chineseVoiceURI?: string;
   dutchAudioSource?: AudioSource;
@@ -43,6 +46,7 @@ export function getVoicePreferences(): VoicePreferences {
     const legacyAudioSource = toAudioSource(parsed.audioSource);
 
     return {
+      audioAutoplay: ['front', 'back', 'both'].includes(String(parsed.audioAutoplay)) ? parsed.audioAutoplay as AudioAutoplay : 'off',
       dutchVoiceURI: toOptionalString(parsed.dutchVoiceURI),
       chineseVoiceURI: toOptionalString(parsed.chineseVoiceURI),
       dutchAudioSource:

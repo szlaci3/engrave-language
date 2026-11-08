@@ -31,7 +31,10 @@ let activeHtmlAudio: HTMLAudioElement | null = null;
 let activeObjectUrl: string | null = null;
 let persistentLookupCache: Record<string, string | null> | null = null;
 
-function stopCurrentAudio() {
+let playbackSequence = 0;
+
+export function stopCurrentAudio() {
+  playbackSequence++;
   window.speechSynthesis?.cancel();
 
   if (activeHtmlAudio) {
@@ -406,8 +409,12 @@ async function getCachedAudioObjectUrl(url: string) {
   }
 }
 
-async function playHtmlAudio(url: string, options: PlayAudioOptions) {
+async function playHtmlAudio(url: string, options: PlayAudioOptions, sequence: number) {
   const objectUrl = await getCachedAudioObjectUrl(url);
+  if (sequence !== playbackSequence) {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    return true;
+  }
   const audio = new Audio(objectUrl ?? url);
   activeHtmlAudio = audio;
   activeObjectUrl = objectUrl;
@@ -461,7 +468,9 @@ export function preloadLanguageAudio(text: string, language: VoiceLanguage) {
     return;
   }
 
+  const sequence = playbackSequence;
   void getCachedWiktionaryAudioUrl(lookupText, language).then((audioUrl) => {
+    if (sequence !== playbackSequence) return;
     if (audioUrl) {
       void cacheAudioResponse(audioUrl);
     }
@@ -492,7 +501,9 @@ function playWiktionaryOrFallback(
 
   stopCurrentAudio();
 
+  const sequence = playbackSequence;
   void getCachedWiktionaryAudioUrl(lookupText, language).then((audioUrl) => {
+    if (sequence !== playbackSequence) return;
     if (!audioUrl) {
       if (!speakWithSpeechSynthesis(text, language, options)) {
         options.onEnd?.();
@@ -501,8 +512,8 @@ function playWiktionaryOrFallback(
       return;
     }
 
-    void playHtmlAudio(audioUrl, options).then((didPlay) => {
-      if (!didPlay && !speakWithSpeechSynthesis(text, language, options)) {
+    void playHtmlAudio(audioUrl, options, sequence).then((didPlay) => {
+      if (sequence === playbackSequence && !didPlay && !speakWithSpeechSynthesis(text, language, options)) {
         options.onEnd?.();
       }
     });
