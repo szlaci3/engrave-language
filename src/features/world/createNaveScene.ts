@@ -206,18 +206,34 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
       while (fontSize > minimum && ctx.measureText(book.title).width > maxWidth) { fontSize -= 4; ctx.font = font(); }
       shown = [book.title];
       if (ctx.measureText(book.title).width > maxWidth) {
-        // Prefer word boundaries; split a single oversized word only when necessary.
-        const text = book.title.trim();
-        const characters = Array.from(text);
-        const wordBreaks = characters.flatMap((char, i) => /\s/.test(char) ? [i] : []);
-        const breaks = wordBreaks.length ? wordBreaks : characters.slice(1).map((_, i) => i + 1);
-        let bestWidth = Infinity;
-        for (const split of breaks) {
-          const lines = [characters.slice(0, split).join('').trim(), characters.slice(split).join('').trim()];
-          const measured = Math.max(...lines.map(line => ctx.measureText(line).width));
-          if (measured < bestWidth) { bestWidth = measured; shown = lines; }
+        // Fit both width and height, growing multiline text above the reference
+        // size where possible. Keep the language label and inset border clear.
+        const maxHeight = 2 * Math.min(height * .61 - 98, height - 30 - height * .61);
+        const wrap = () => {
+          const lines: string[] = [];
+          let line = '';
+          for (const word of book.title.trim().split(/\s+/)) {
+            if (line && ctx.measureText(`${line} ${word}`).width <= maxWidth) {
+              line += ` ${word}`;
+              continue;
+            }
+            if (line) lines.push(line);
+            line = '';
+            for (const character of word) {
+              if (line && ctx.measureText(line + character).width > maxWidth) {
+                lines.push(line); line = '';
+              }
+              line += character;
+            }
+          }
+          if (line) lines.push(line);
+          return lines;
+        };
+        for (fontSize = 110; fontSize >= 1; fontSize--) {
+          ctx.font = font();
+          shown = wrap();
+          if (shown.length <= 3 && fontSize * (1 + (shown.length - 1) * 1.15) <= maxHeight) break;
         }
-        while (fontSize > 1 && shown.some(line => ctx.measureText(line).width > maxWidth)) { fontSize -= 1; ctx.font = font(); }
       }
     } else {
       while (fontSize > 28 && ctx.measureText(book.title).width > maxWidth) { fontSize -= 4; ctx.font = font(); }

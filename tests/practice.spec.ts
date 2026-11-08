@@ -498,7 +498,7 @@ test('desktop WASD walking, queued steps and control order', async ({ page }) =>
   await expect(input).toHaveValue('wasd');
 });
 
-test('Dutch stones wrap before reducing the reference font size', async ({ page }) => {
+test('Dutch stones dynamically size up to three lines', async ({ page }) => {
   await page.addInitScript(() => {
     const draws: { text: string; font: string; width: number; available: number }[] = [];
     Object.assign(window, { stoneTextDraws: draws });
@@ -509,7 +509,7 @@ test('Dutch stones wrap before reducing the reference font size', async ({ page 
     };
   });
   const reference = 'Open de app op je smartphone';
-  const wrapped = 'Vandaag wandelen we samen door de mooie stad';
+  const wrapped = 'controleer het bedrag van je aankoop';
   const long = 'Dit is een bijzonder lange Nederlandse zin met heel veel woorden die ook over twee regels nog kleiner moet worden om helemaal op de steen te passen';
   await page.goto('/files/new');
   await page.locator('#deck-title').fill('Readable Dutch');
@@ -523,12 +523,12 @@ test('Dutch stones wrap before reducing the reference font size', async ({ page 
   const referenceSize = parseFloat(referenceDraw.font);
   for (const [text, smaller] of [[wrapped, false], [long, true]] as const) {
     const lines = draws.filter(draw => draw.text.length > 10 && text.includes(draw.text) && draw.text !== reference);
-    expect(lines).toHaveLength(2);
+    expect(lines).toHaveLength(smaller ? 3 : 2);
     expect(lines.map(line => line.text).join(' ')).toBe(text);
     for (const line of lines) {
       expect(line.width).toBeLessThanOrEqual(line.available);
       if (smaller) expect(parseFloat(line.font)).toBeLessThan(referenceSize);
-      else expect(parseFloat(line.font)).toBe(referenceSize);
+      else expect(parseFloat(line.font)).toBeGreaterThan(referenceSize);
     }
   }
 });
