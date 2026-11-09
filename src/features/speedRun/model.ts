@@ -1,5 +1,6 @@
 import type { VocabularyEntry } from '../files/types';
 
+export const SPEED_RUN_NEAR_DISTANCE_MULTIPLIER = 0.9;
 export const SPEED_RUN_TRIO_SPACING = 25.2;
 export const GHOST_SECONDS = 2;
 export type Direction = 'zh-nl' | 'nl-zh';

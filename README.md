@@ -59,3 +59,6 @@ Speed Run stones use the same Three.js slab geometry, engraved canvas textures,
 lighting, and floor reflections as 3D review. Trios have fixed world positions;
 the camera advances through the aisle. Invisible accessible buttons follow the
 projected mesh faces for tapping and keyboard focus.
+
+`SPEED_RUN_NEAR_DISTANCE_MULTIPLIER = 0.9` controls the closest trio depth as a
+multiple of the viewport-dependent review near distance.

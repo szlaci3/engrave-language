@@ -1,3 +1,4 @@
+import { SPEED_RUN_NEAR_DISTANCE_MULTIPLIER } from '../speedRun/model';
 import { createParquetFloor } from './parquetFloor';
 import * as THREE from 'three';
 import type { Flashcard } from './flashcards';
@@ -418,7 +419,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
           bookMeshes.set(stone.id, group); scene.add(group);
           const reflected = group.clone(); reflectionMeshes.set(stone.id, reflected); reflectedStones.add(reflected);
         }
-        group.position.set(stone.x, stone.y, -stone.station - nearDistance * 2.1);
+        group.position.set(stone.x, stone.y, -stone.station - nearDistance * SPEED_RUN_NEAR_DISTANCE_MULTIPLIER);
         for (const material of runMaterials.get(stone.id)!) {
           material.transparent = stone.opacity < 1; material.opacity = stone.opacity; material.depthWrite = stone.opacity === 1;
           if (material instanceof THREE.MeshBasicMaterial) material.color.set(stone.tint ?? '#ffffff');
