@@ -53,7 +53,7 @@ for (const width of [390, 1280]) test(`speed run selects decks, keeps moving and
   await expect(page.locator('.run-feedback-history .run-correct')).toHaveCount(1);
   await expect.poll(async () => Number(await page.locator('.run-scene').getAttribute('data-position'))).toBeGreaterThan(start);
   await page.screenshot({ path: test.info().outputPath(`run-feedback-${width}.png`) });
-  await page.getByRole('button', { name: '← Decks' }).click();
+  await page.getByRole('button', { name: 'Back to decks' }).click();
   await expect(page.locator('.run-deck')).toHaveAttribute('aria-pressed', 'true');
   const saved = await backup(page);
   expect(saved.version).toBe(3);
@@ -81,7 +81,7 @@ test('unanswered cards repeat, speed persists, and card edits preserve progress'
   await expect(page.locator('.run-heading [role=status]')).toContainText('Unanswered 3', { timeout: 30000 });
   await expect(page.locator('.run-endline')).toHaveText('Endline - Starting again');
   await expect.poll(async () => JSON.parse((await page.locator('.run-scene').getAttribute('data-stones'))!).filter((stone: { shattered: boolean }) => stone.shattered).length).toBeGreaterThan(0);
-  await page.getByRole('button', { name: '← Decks' }).click();
+  await page.getByRole('button', { name: 'Back to decks' }).click();
   const original = await backup(page);
   expect(original.data.progress.reduce((sum: number, item: { unanswered: number }) => sum + item.unanswered, 0)).toBeGreaterThanOrEqual(3);
   await page.goto(url);

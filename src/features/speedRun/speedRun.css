@@ -6,10 +6,11 @@
 .run-deck[aria-pressed=true] { border-color:#216b9b; background:#c6e5f7; box-shadow:inset 5px 0 #216b9b; }
 .speed-world { position:fixed; inset:0; overflow:hidden; background:#dceaf4; color:#173f57; }
 .run-scene { position:absolute; inset:0; }
-.run-heading { position:absolute; top:max(12px,env(safe-area-inset-top)); left:4%; right:4%; z-index:5; pointer-events:none; background:#f3eddfed; border-radius:12px; padding:10px 14px; }
+.run-heading { position:absolute; top:max(12px,env(safe-area-inset-top)); left:4%; width:max-content; max-width:92%; display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; z-index:5; pointer-events:none; background:#f3eddfed; border-radius:12px; padding:6px 10px; }
 .run-heading button { pointer-events:auto; border:0; border-radius:8px; padding:8px 12px; background:#edf7f8df; color:#173f57; cursor:pointer; }
-.run-heading h1 { font-size:22px; margin:8px 0; }
-.run-heading p { margin:5px 0; font-size:14px; }
+.run-heading p { margin:0; font-size:clamp(10px,3.1vw,14px); }
+.run-heading [role=status] { white-space:nowrap; }
+.run-heading .run-endline,.run-heading [role=alert] { flex-basis:100%; }
 .run-endline { font-weight:700; }
 .run-toolbar { position:absolute; bottom:max(12px,env(safe-area-inset-bottom)); left:4%; right:4%; background:#e9f5f9e8; border-radius:14px; height:54px; }
 .run-toolbar label { display:block; position:relative; width:100%; height:100%; }
@@ -17,7 +18,6 @@
 .run-toolbar input { position:absolute; inset:0; margin:0; width:100%; height:100%; opacity:.4; cursor:pointer; }
 .run-key-hints { position:absolute; bottom:calc(100% + 8px); right:0; font-size:13px; background:#e9f5f9e8; padding:4px 8px; border-radius:6px; pointer-events:none; }
 @media (pointer:coarse) { .run-key-hints { display:none; } }
-@media (max-height:500px) { .run-heading h1 { display:none; } }
 /* Transparent accessible hit targets track the projected Three.js mesh faces. */
 .run-stage,.run-stage-with-feedback { position:absolute; inset:0; width:100%; max-width:none; margin:0; transform:none; transition:none; pointer-events:none; }
 .run-stage .run-prompt,.run-stage .run-answers,.run-stage .run-trio { display:contents; }

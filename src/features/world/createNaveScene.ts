@@ -61,31 +61,43 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   }
   nave.add(panels);
   if (sceneryOnly) {
-    // Speed Run has its own modern gallery; review retains the vaulted water aisle.
+    // Speed Run keeps the warm gallery palette beneath the shared Gothic vault.
     const limestone = keep(new THREE.MeshLambertMaterial({ color: '#ded3b8' }));
     const patina = keep(new THREE.MeshLambertMaterial({ color: '#366b70' }));
     const brass = keep(new THREE.MeshBasicMaterial({ color: '#b99d66' }));
-    const ceiling = keep(new THREE.MeshBasicMaterial({ color: '#eee5d1', side: THREE.DoubleSide }));
-    repeated(new THREE.BoxGeometry(.7, 12, .7), patina, pillars.map(([x,,z]) => [x,6,z]));
+    repeated(new THREE.BoxGeometry(.7, 11, .7), patina, pillars.map(([x,,z]) => [x,5.5,z]));
     repeated(new THREE.BoxGeometry(1.15, .25, 1.15), limestone, pillars.map(([x,,z]) => [x,.125,z]));
-    repeated(new THREE.BoxGeometry(1.1, .3, 1.1), brass, pillars.map(([x,,z]) => [x,11.4,z]));
-    const stations: [number, number, number][] = Array.from({ length: segments }, (_, i) => [0,12,-i*10-5]);
-    repeated(new THREE.BoxGeometry(21, .3, 10), ceiling, stations);
-    repeated(new THREE.BoxGeometry(21, .45, .45), limestone, stations.map(([x,y,z]) => [x,y-.35,z+5]));
-    for (const side of [-1,1]) {
-      repeated(new THREE.BoxGeometry(.2, .15, 10), brass, stations.map(([,y,z]) => [side*6,y-.25,z]));
-      repeated(new THREE.BoxGeometry(.15, .16, 10), brass, stations.map(([, ,z]) => [side*9.8,.12,z]));
-    }
+    repeated(new THREE.BoxGeometry(1.1, .3, 1.1), brass, pillars.map(([x,,z]) => [x,10.9,z]));
+    const floorStations: [number, number, number][] = Array.from({ length: segments }, (_, i) => [0,0,-i*10-5]);
+    for (const side of [-1,1]) repeated(new THREE.BoxGeometry(.15, .16, 10), brass, floorStations.map(([, ,z]) => [side*9.8,.12,z]));
     const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512;
     const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = '#d8ccb1'; ctx.fillRect(0,0,512,512);
-    ctx.strokeStyle = '#c3b596'; ctx.lineWidth = 3;
-    for (const y of [0,128,256,384,512]) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(512,y); ctx.stroke(); }
-    for (let row=0;row<4;row++) for (let col=0;col<3;col++) {
-      const x=col*256-(row%2)*128; ctx.beginPath(); ctx.moveTo(x,row*128); ctx.lineTo(x,(row+1)*128); ctx.stroke();
+    ctx.fillStyle = '#e3d8bd'; ctx.fillRect(0,0,512,512);
+    // Layered pointed tracery and botanical medallions, drawn once per wall bay.
+    ctx.strokeStyle = '#b99d66'; ctx.lineWidth = 4; ctx.strokeRect(14,14,484,484);
+    for (const center of [128,384]) {
+      ctx.fillStyle = '#d0c7ac'; ctx.strokeStyle = '#487b79'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(center-96,480); ctx.lineTo(center-96,178);
+      ctx.bezierCurveTo(center-96,112,center-36,66,center,38);
+      ctx.bezierCurveTo(center+36,66,center+96,112,center+96,178);
+      ctx.lineTo(center+96,480); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.save(); ctx.translate(center,206);
+      for (let petal=0;petal<8;petal++) {
+        ctx.rotate(Math.PI/4); ctx.strokeStyle = '#487b79'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.ellipse(0,-29,13,31,0,0,Math.PI*2); ctx.stroke();
+      }
+      ctx.strokeStyle = '#b99d66'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(0,0,13,0,Math.PI*2); ctx.stroke(); ctx.restore();
+      for (const side of [-1,1]) {
+        ctx.strokeStyle = '#487b79'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(center,470); ctx.bezierCurveTo(center+side*72,420,center-side*36,354,center+side*55,290); ctx.stroke();
+        for (let leaf=0;leaf<5;leaf++) {
+          const y=320+leaf*28, x=center+side*(24+Math.sin(leaf)*20);
+          ctx.fillStyle = leaf%2 ? '#b99d66' : '#648d83';
+          ctx.beginPath(); ctx.ellipse(x,y,9,19,side*.7,0,Math.PI*2); ctx.fill();
+        }
+      }
     }
-    ctx.strokeStyle = '#ac9363'; ctx.lineWidth = 6; ctx.strokeRect(22,32,468,448);
-    ctx.fillStyle = '#366b70'; ctx.fillRect(48,72,416,12); ctx.fillRect(48,428,416,12);
     const texture = keep(new THREE.CanvasTexture(canvas)); texture.colorSpace = THREE.SRGBColorSpace;
     wall.map = texture; wall.color.set('#ffffff');
   } else {
@@ -97,7 +109,8 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   for (const [radius,height,y] of [[1,.35,.18],[.85,.25,.48],[.72,.2,.7],[.78,.3,10.8],[.95,.22,11.05]]) {
     repeated(new THREE.CylinderGeometry(radius, radius + .08, height, 12), trim, bases.map(([x,,z]) => [x,y,z]));
   }
-  const archTrim = keep(new THREE.MeshBasicMaterial({ color: '#b6d1e6' }));
+  }
+  const archTrim = keep(new THREE.MeshBasicMaterial({ color: sceneryOnly ? '#b99d66' : '#b6d1e6' }));
   const arch = new THREE.CurvePath<THREE.Vector3>();
   arch.add(new THREE.QuadraticBezierCurve3(new THREE.Vector3(-10, 11, 0), new THREE.Vector3(-9, 17, 0), new THREE.Vector3(0, 20, 0)));
   arch.add(new THREE.QuadraticBezierCurve3(new THREE.Vector3(0, 20, 0), new THREE.Vector3(9, 17, 0), new THREE.Vector3(10, 11, 0)));
@@ -113,13 +126,12 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   const vault = new THREE.BufferGeometry();
   vault.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
   vault.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2)); vault.setIndex(indices); vault.computeVertexNormals();
-  const vaultMaterial = keep(new THREE.MeshBasicMaterial({ color: '#ffffff', side: THREE.DoubleSide, fog: false }));
+  const vaultMaterial = keep(new THREE.MeshBasicMaterial({ color: sceneryOnly ? '#eee5d1' : '#ffffff', side: THREE.DoubleSide, fog: false }));
   repeated(vault,vaultMaterial,stations);
   // Diagonal ribs join each pair of columns to the crown of its bay.
   for (const side of [-1,1]) for (const end of [0,-10]) {
     const rib = new THREE.QuadraticBezierCurve3(new THREE.Vector3(side*10,11,end),new THREE.Vector3(side*8,17,-5),new THREE.Vector3(0,20,-5));
     repeated(new THREE.TubeGeometry(rib,24,.12,6,false),archTrim,stations);
-  }
   }
   const blueStone = keep(new THREE.MeshLambertMaterial({ color: '#424f58' }));
   const whiteStone = keep(new THREE.MeshLambertMaterial({ color: '#a9a394' }));

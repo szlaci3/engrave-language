@@ -82,4 +82,4 @@ Audio clips no longer interrupt one another. Recordings can overlap; browser spe
 
 When UI language is English, audio for the Chinese-side stones (including English JSON imports) uses an available English browser voice, with `en-US` as the fallback language. This applies to manual playback and autoplay in both review modes and Speed Run. Dutch audio retains its existing source and voice preferences.
 
-Speed Run uses a separate limestone gallery: flat coffered ceiling, framed stone-block walls, teal square columns with brass trim, and pale reflective tile flooring. The vaulted water aisle remains exclusive to 3D review. Both worlds share the same stone geometry and navigation.
+Speed Run uses a separate limestone gallery: Gothic ribbed vault in cream and brass, ornate teal botanical tracery on the walls, teal square columns with brass trim, and pale reflective tile flooring. 3D review retains its original blue-and-white water aisle. Both worlds share the same stone geometry and navigation.
