@@ -9,7 +9,7 @@ import { getVoicePreferences } from '../settings/voicePreferences';
 import { getChineseAudioTextParts, stopCurrentAudio } from '../files/audioService';
 import { speakChinese, speakDutch } from '../files/speech';
 import { WALK_SPEED } from '../world/navigation';
-import { SPEED_RUN_VISIBLE_TRIOS, ANSWER_AUDIO_DELAY_SECONDS, SPEED_RUN_ANSWER_OFFSET, SPEED_RUN_PROMPT_MOVE, SPEED_RUN_TRIO_SPACING, makeQuestion, shuffled, type Direction, type Outcome, type Question } from './model';
+import { SPEED_RUN_VISIBLE_TRIOS, SPEED_RUN_ANSWER_OFFSET, SPEED_RUN_PROMPT_MOVE, SPEED_RUN_TRIO_SPACING, makeQuestion, shuffled, type Direction, type Outcome, type Question } from './model';
 import { recordResult } from './progress';
 import './speedRun.css';
 
@@ -49,7 +49,7 @@ function Run({ entries, direction, exit }: { entries: VocabularyEntry[]; directi
   const [error, setError] = useState('');
   useEffect(() => {
     let active = true, frame = 0, last = 0, distance = 0, nextAt = SPEED_RUN_TRIO_SPACING, elapsed = 0;
-    let pool: VocabularyEntry[] = [], cursor = 0, current: Question | null = null, answered = false, noticeUntil = 0, promptAt = 0, answerUntil = 0, serial = 0;
+    let pool: VocabularyEntry[] = [], cursor = 0, current: Question | null = null, answered = false, noticeUntil = 0, promptAt = 0, serial = 0;
     let feedback: (Trio & { id: number; born: number; station: number })[] = [];
     let world: Awaited<ReturnType<typeof import('../world/createNaveScene')['createNaveScene']>> | undefined;
     let upcoming: { question: Question; startsLap: boolean } | null = null;
@@ -75,7 +75,7 @@ function Run({ entries, direction, exit }: { entries: VocabularyEntry[]; directi
       upcoming = takeQuestion();
       answered = false;
       setTrio({ question: current, chosen: null });
-      promptAt = Math.max(elapsed, answerUntil);
+      promptAt = elapsed;
     };
     const answer = (side: 0 | 1 | null) => {
       if (!current || answered) return;
@@ -87,9 +87,8 @@ function Run({ entries, direction, exit }: { entries: VocabularyEntry[]; directi
       feedback.push(snapshot);
       setFeedbackList([...feedback]);
       setTrio(null);
-      stopCurrentAudio();
       const mode = getVoicePreferences().audioAutoplay;
-      if (mode === 'back' || mode === 'both') { audio(current.answers[current.correctSide], direction === 'zh-nl' ? 'nl' : 'zh'); answerUntil = elapsed + ANSWER_AUDIO_DELAY_SECONDS; }
+      if (mode === 'back' || mode === 'both') { audio(current.answers[current.correctSide], direction === 'zh-nl' ? 'nl' : 'zh'); }
       nextAt += SPEED_RUN_TRIO_SPACING;
       next();
     };
@@ -101,7 +100,7 @@ function Run({ entries, direction, exit }: { entries: VocabularyEntry[]; directi
     const keyboard = (event: KeyboardEvent) => {
       if (event.repeat || event.ctrlKey || event.altKey || event.metaKey || (event.target instanceof HTMLElement && event.target.closest('input,select,textarea,[contenteditable]'))) return;
       const key = event.key.toLowerCase();
-      if (['a', 'd', 'arrowleft', 'arrowright'].includes(key)) { event.preventDefault(); choose.current(key === 'a' || key === 'arrowleft' ? 0 : 1); }
+      if (['w', 's', 'arrowup', 'arrowdown'].includes(key)) { event.preventDefault(); choose.current(key === 'w' || key === 'arrowup' ? 0 : 1); }
     };
     const tick = (time: number) => {
       if (!active) return;
@@ -152,7 +151,7 @@ function Run({ entries, direction, exit }: { entries: VocabularyEntry[]; directi
     <header className="run-heading"><button onClick={exit}>← Decks</button><h1>Speed Run</h1><p role="status">Correct {counts.correct} · Mistakes {counts.mistake} · Unanswered {counts.unanswered}</p><p className="run-endline">{notice}</p>{error && <p role="alert">{error}</p>}</header>
     <div className={`run-stage${feedbackList.length ? ' run-stage-with-feedback' : ''}`} ref={approaching}>{trio && <TrioView trio={trio} choose={(side, event) => choose.current(side, event.detail === 0 ? undefined : event.clientX, event.detail === 0 ? undefined : event.clientY)} />}</div>
     <div ref={history}>{feedbackList.map(item => <div className="run-feedback-history" key={item.id} data-born={item.born} ><TrioView trio={item} feedback /></div>)}</div>
-    <footer className="run-toolbar"><label><span className="run-speed-text">Speed {speed.toFixed(1)}×</span><input aria-label="Speed" type="range" min="0.1" max="3" step="0.1" value={speed} onChange={event => { const value = Number(event.target.value); setSpeed(value); speedRef.current = value; void db.settings.put({ key: 'speed-run-speed', value: String(value), updatedAt: new Date().toISOString() }).catch(() => setError('Could not save speed.')); }} /></label><span className="run-key-hints">A / ← Upper · D / → Lower</span></footer>
+    <footer className="run-toolbar"><label><span className="run-speed-text">Speed {speed.toFixed(1)}×</span><input aria-label="Speed" type="range" min="0.1" max="3" step="0.1" value={speed} onChange={event => { const value = Number(event.target.value); setSpeed(value); speedRef.current = value; void db.settings.put({ key: 'speed-run-speed', value: String(value), updatedAt: new Date().toISOString() }).catch(() => setError('Could not save speed.')); }} /></label><span className="run-key-hints">W / ↑ Upper · S / ↓ Lower</span></footer>
   </main>;
 }
 export function SpeedRunPage() {

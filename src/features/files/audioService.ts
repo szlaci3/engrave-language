@@ -27,8 +27,7 @@ const wiktionaryLanguageCodeByVoiceLanguage: Record<VoiceLanguage, string> = {
 };
 
 const wiktionaryAudioCache = new Map<string, Promise<string | null>>();
-let activeHtmlAudio: HTMLAudioElement | null = null;
-let activeObjectUrl: string | null = null;
+const activeHtmlAudios = new Map<HTMLAudioElement, () => void>();
 let persistentLookupCache: Record<string, string | null> | null = null;
 
 let playbackSequence = 0;
@@ -37,15 +36,10 @@ export function stopCurrentAudio() {
   playbackSequence++;
   window.speechSynthesis?.cancel();
 
-  if (activeHtmlAudio) {
-    activeHtmlAudio.pause();
-    activeHtmlAudio.src = '';
-    activeHtmlAudio = null;
-  }
-
-  if (activeObjectUrl) {
-    URL.revokeObjectURL(activeObjectUrl);
-    activeObjectUrl = null;
+  for (const [audio, finish] of activeHtmlAudios) {
+    audio.pause();
+    audio.src = '';
+    finish();
   }
 }
 
@@ -57,8 +51,6 @@ function speakWithSpeechSynthesis(
   if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
     return false;
   }
-
-  stopCurrentAudio();
 
   const preferences = getVoicePreferences();
   const preferredVoiceURI =
@@ -416,8 +408,6 @@ async function playHtmlAudio(url: string, options: PlayAudioOptions, sequence: n
     return true;
   }
   const audio = new Audio(objectUrl ?? url);
-  activeHtmlAudio = audio;
-  activeObjectUrl = objectUrl;
   let didFinish = false;
 
   function finishAudio() {
@@ -427,9 +417,7 @@ async function playHtmlAudio(url: string, options: PlayAudioOptions, sequence: n
 
     didFinish = true;
 
-    if (activeObjectUrl === objectUrl) {
-      activeObjectUrl = null;
-    }
+    activeHtmlAudios.delete(audio);
 
     if (objectUrl) {
       URL.revokeObjectURL(objectUrl);
@@ -438,6 +426,7 @@ async function playHtmlAudio(url: string, options: PlayAudioOptions, sequence: n
     options.onEnd?.();
   }
 
+  activeHtmlAudios.set(audio, finishAudio);
   audio.onended = finishAudio;
   audio.onerror = finishAudio;
 
@@ -498,8 +487,6 @@ function playWiktionaryOrFallback(
   if (!lookupText) {
     return speakWithSpeechSynthesis(text, language, options);
   }
-
-  stopCurrentAudio();
 
   const sequence = playbackSequence;
   void getCachedWiktionaryAudioUrl(lookupText, language).then((audioUrl) => {

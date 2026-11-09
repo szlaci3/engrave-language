@@ -47,7 +47,7 @@ for (const width of [390, 1280]) test(`speed run selects decks, keeps moving and
   const buttons = page.locator('.run-stage .run-answers button');
   const left = await buttons.first().innerText() === correct;
   const start = Number(await page.locator('.run-scene').getAttribute('data-position'));
-  if (width > 500) await page.keyboard.press(left ? 'ArrowLeft' : 'ArrowRight');
+  if (width > 500) await page.keyboard.press(left ? 'ArrowUp' : 'ArrowDown');
   else await buttons.nth(left ? 0 : 1).click({ force: true });
   await expect(page.locator('.run-heading [role=status]')).toContainText('Correct 1');
   await expect(page.locator('.run-feedback-history .run-correct')).toHaveCount(1);
@@ -108,7 +108,8 @@ test('speed run reads prompts first and answers only after a choice', async ({ p
     localStorage.setItem('wooord.voicePreferences', JSON.stringify({ audioAutoplay: 'both', dutchAudioSource: 'speechSynthesis' }));
     const spoken: string[] = []; Object.assign(window, { spoken });
     speechSynthesis.speak = utterance => { spoken.push(utterance.text); };
-    speechSynthesis.cancel = () => {};
+    Object.assign(window, { cancelled: 0 });
+    speechSynthesis.cancel = () => { (window as unknown as { cancelled: number }).cancelled++; };
   });
   await deck(page);
   await page.goto('/speed-run');
@@ -126,9 +127,10 @@ test('speed run reads prompts first and answers only after a choice', async ({ p
   await expect.poll(spoken).toEqual([prompt]);
   const correct = ({ '水': 'water', '书': 'boek', '世界': 'wereld' } as Record<string, string>)[prompt];
   const leftCorrect = await page.locator('.run-stage .run-answers button').first().innerText() === correct;
-  await page.keyboard.press(leftCorrect ? 'd' : 'a');
+  await page.keyboard.press(leftCorrect ? 's' : 'w');
   await expect(page.locator('.run-heading [role=status]')).toContainText('Mistakes 1');
   await expect.poll(async () => (await spoken()).slice(0, 2)).toEqual([prompt, correct]);
+  expect(await page.evaluate(() => (window as unknown as { cancelled: number }).cancelled)).toBe(0);
 });
 
 test('portrait previews stay fixed and trios drop at the configured near distance', async ({ page }) => {
@@ -154,7 +156,7 @@ test('portrait previews stay fixed and trios drop at the configured near distanc
   const after = await read();
   expect(after.camera).toBeLessThan(before.camera);
   expect(after.stones).toEqual(before.stones);
-  await page.keyboard.press('a');
+  await page.keyboard.press('w');
   await page.clock.runFor(400);
   const answeredStart = await read();
   await page.clock.runFor(400);

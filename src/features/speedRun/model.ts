@@ -4,7 +4,6 @@ export const SPEED_RUN_NEAR_DISTANCE_MULTIPLIER = 1;
 export const SPEED_RUN_DROP_DISTANCE_MULTIPLIER = 0.7;
 export const SPEED_RUN_VISIBLE_TRIOS = 2;
 export const SPEED_RUN_TRIO_SPACING = 9;
-export const ANSWER_AUDIO_DELAY_SECONDS = 2;
 export const SPEED_RUN_ANSWER_OFFSET = 2.325;
 // 1.65-unit stone height leaves a 0.25-unit gap after the prompt moves.
 export const SPEED_RUN_PROMPT_MOVE = 0.425;

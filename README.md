@@ -43,7 +43,7 @@ In the managed cloud environment, also set `ENGRAVE_TEST_PROXY="$HTTPS_PROXY"`. 
 ### Speed Run
 
 Open Speed Run after Settings, tap decks to select them, choose the prompt language,
-and press Play. A/D and Left/Right arrows select answers on desktop; tap stones on
+and press Play. W/Up selects the upper answer and S/Down selects the lower answer on desktop; tap stones on
 mobile. The aisle moves continuously at adjustable speed. There is no round timer.
 Unanswered questions count separately from mistakes. At the end of the selected
 material, the run displays “Endline - Starting again” and shuffles another lap.
@@ -77,3 +77,5 @@ when at least one side has content. Empty dialogs create no card. Cards can be
 deleted from file view or the 3D edit dialog after confirmation. Deletion removes
 that card's progress, while other IDs and history remain intact. Speed Run follows
 the landing page deck order and uses cards with both sides filled.
+
+Audio clips no longer interrupt one another. Recordings can overlap; browser speech queues utterances because the Web Speech API uses a single speech channel. Autoplay keeps the selected front/back/both behavior in 2D, 3D and Speed Run. Advancing or choosing an answer does not cancel previous clips or pending lookups, and Speed Run has no artificial answer-audio delay. Leaving a practice view stops its audio.
