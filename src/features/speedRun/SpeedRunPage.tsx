@@ -110,7 +110,7 @@ function Run({ entries, direction, exit }: { entries: VocabularyEntry[]; directi
       const addTrio = (question: Question, id: number, station: number, age = -1, chosen: 0 | 1 | null = null) => {
         const movement = chosen === null ? 0 : (chosen === 0 ? 1 : -1) * SPEED_RUN_PROMPT_MOVE * Math.min(1, age / .3);
         stones.push({ id, title: question.prompt, language: direction === 'zh-nl' ? 'zh' : 'nl', x: 0, y: 4 + movement, station, opacity: 1 });
-        question.answers.forEach((title, side) => stones.push({ id: id + side + 1, title, language: direction === 'zh-nl' ? 'nl' : 'zh', x: 0, y: 4 + (side === 0 ? SPEED_RUN_ANSWER_OFFSET : -SPEED_RUN_ANSWER_OFFSET), station, opacity: 1, tint: age < 0 ? undefined : side === question.correctSide ? '#82d793' : side === chosen ? '#ed8b80' : undefined }));
+        question.answers.forEach((title, side) => stones.push({ id: id + side + 1, title, language: direction === 'zh-nl' ? 'nl' : 'zh', x: 0, y: 4 + (side === 0 ? SPEED_RUN_ANSWER_OFFSET : -SPEED_RUN_ANSWER_OFFSET), station, opacity: 1, shatter: age >= 0 && chosen === null && side !== question.correctSide, tint: age < 0 ? undefined : side === question.correctSide ? '#82d793' : side === chosen ? '#ed8b80' : undefined }));
       };
       if (current) addTrio(current, serial * 3, nextAt);
       if (SPEED_RUN_VISIBLE_TRIOS > 1 && upcoming) addTrio(upcoming.question, (serial + 1) * 3, nextAt + SPEED_RUN_TRIO_SPACING);

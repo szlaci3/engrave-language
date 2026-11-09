@@ -1,10 +1,10 @@
-import { SPEED_RUN_DROP_DISTANCE_MULTIPLIER, SPEED_RUN_NEAR_DISTANCE_MULTIPLIER } from '../speedRun/model';
+import { SPEED_RUN_TRIO_SPACING, SPEED_RUN_DROP_DISTANCE_MULTIPLIER, SPEED_RUN_NEAR_DISTANCE_MULTIPLIER } from '../speedRun/model';
 import { createParquetFloor } from './parquetFloor';
 import * as THREE from 'three';
 import type { Flashcard } from './flashcards';
 import { BOOK_SPACING, BOOK_THICKNESS, VISIBLE_BOOK_COUNT, REPEAT_PREVIEW_REMAINING, PASSED_BOOK_CACHE_COUNT, advanceBookDrop, WALK_SPEED, deckIndex, currentBookIndex, isMovementTarget, adjacentStone } from './navigation';
 
-export type RunStone = { id: number; title: string; language: 'nl' | 'zh'; x: number; y: number; station: number; opacity: number; tint?: string };
+export type RunStone = { id: number; title: string; language: 'nl' | 'zh'; x: number; y: number; station: number; opacity: number; tint?: string; shatter?: boolean };
 const MAX_STEP_COUNT = 4;
 
 export function createNaveScene(host: HTMLElement, onCurrent: (index: number) => void, onError: () => void, onComplete: () => void, sceneryOnly = false) {
@@ -100,6 +100,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   const frontGeometry = keep(new THREE.PlaneGeometry(5.3, stoneHeight));
   const bookMeshes = new Map<number, THREE.Group>();
   const bookDrops = new Map<number, number>();
+  let fragmentGeometry: THREE.BoxGeometry | undefined;
   const runDropStarts = new Map<number, number>();
   const runWrittenTextures = new Map<number, THREE.Texture>();
   const runBlankTextures = new Map<Flashcard['language'], THREE.Texture>();
@@ -120,6 +121,15 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
       reflected.position.copy(group.position);
       reflected.position.y -= reflectionLift;
       reflected.visible = group.visible;
+      group.children.forEach((child, index) => {
+        const mirror = reflected.children[index];
+        if (!mirror) return;
+        mirror.visible = child.visible;
+        child.children.forEach((piece, pieceIndex) => {
+          mirror.children[pieceIndex]?.position.copy(piece.position);
+          mirror.children[pieceIndex]?.rotation.copy(piece.rotation);
+        });
+      });
       group.visible = false;
     }
     try {
@@ -414,8 +424,14 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
     pickRunStone(clientX: number, clientY: number) {
       const bounds = renderer.domElement.getBoundingClientRect();
       runRaycaster.setFromCamera(new THREE.Vector2((clientX - bounds.left) / bounds.width * 2 - 1, 1 - (clientY - bounds.top) / bounds.height * 2), camera);
-      const hit = runRaycaster.intersectObjects([...bookMeshes.values()], true)[0];
-      return hit?.object.parent?.userData.runId as number | undefined;
+      const hit = runRaycaster.intersectObjects([...bookMeshes.values()], true).find(candidate => {
+        let object: THREE.Object3D | null = candidate.object;
+        while (object) { if (!object.visible) return false; object = object.parent; }
+        return true;
+      });
+      let object: THREE.Object3D | null = hit?.object ?? null;
+      while (object && object.userData.runId === undefined) object = object.parent;
+      return object?.userData.runId as number | undefined;
     },
     tour(distance: number, stones: RunStone[] = [], time = performance.now() / 1000) {
       const ids = new Set(stones.map(stone => stone.id));
@@ -445,17 +461,45 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
           if (material instanceof THREE.MeshBasicMaterial) material.color.set(stone.tint ?? '#ffffff');
         }
       }
+      for (const stone of stones) {
+        if (!stone.shatter) continue;
+        const group = bookMeshes.get(stone.id)!;
+        if (group.userData.shatterStart === undefined) {
+          group.userData.shatterStart = time;
+          group.children[0].visible = false; group.children[1].visible = false;
+          fragmentGeometry ??= keep(new THREE.BoxGeometry(.5, .38, .35));
+          const material = (runMaterials.get(stone.id)![0] as THREE.MeshLambertMaterial).clone();
+          material.transparent = true; material.depthWrite = false;
+          runMaterials.get(stone.id)!.push(material);
+          const fragments = new THREE.Group();
+          for (let i = 0; i < 40; i++) fragments.add(new THREE.Mesh(fragmentGeometry, material));
+          group.add(fragments);
+          reflectionMeshes.get(stone.id)!.add(fragments.clone());
+        }
+        const age = time - group.userData.shatterStart;
+        const material = runMaterials.get(stone.id)!.at(-1)!;
+        material.transparent = true; material.depthWrite = false;
+        material.opacity = Math.max(0, 1 - age / .65);
+        group.visible = age < .65;
+        group.children[2].children.forEach((piece, i) => {
+          const x = ((i % 10) - 4.5) * .53, y = (Math.floor(i / 10) - 1.5) * .4125;
+          const scatter = Math.sin(i * 17.3 + stone.id);
+          piece.position.set(x * (1 + age * 1.3), y + age * (1 + scatter) - 12 * age * age, age * (scatter * 2 + 1));
+          piece.rotation.set(age * (i % 5 - 2) * 3, age * scatter * 5, age * scatter * 2);
+        });
+      }
       const nearest = Math.min(...stones.filter(stone => bookMeshes.get(stone.id)!.visible).map(stone => stone.station));
+      const revealThrough = distance >= nearest ? nearest + SPEED_RUN_TRIO_SPACING : nearest;
       for (const stone of stones) {
         const group = bookMeshes.get(stone.id)!;
-        group.userData.written = stone.station === nearest;
+        group.userData.written = stone.station <= revealThrough;
         const face = runMaterials.get(stone.id)![1] as THREE.MeshBasicMaterial;
         face.map = group.userData.written ? runWrittenTextures.get(stone.id)! : runBlankTextures.get(stone.language)!;
       }
       position = distance; render(0);
       host.dataset.nearDistance = String(nearDistance);
       host.dataset.cameraZ = String(camera.position.z);
-      host.dataset.stones = JSON.stringify([...bookMeshes].map(([id, group]) => ({ id, position: group.position.toArray(), visible: group.visible, written: group.userData.written })));
+      host.dataset.stones = JSON.stringify([...bookMeshes].map(([id, group]) => ({ id, position: group.position.toArray(), visible: group.visible, written: group.userData.written, shattered: group.userData.shatterStart !== undefined })));
       return stones.map(stone => {
         const group = bookMeshes.get(stone.id)!;
         const a = new THREE.Vector3(-2.65, .825, .36).add(group.position).project(camera);

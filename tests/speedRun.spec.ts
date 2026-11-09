@@ -80,6 +80,7 @@ test('unanswered cards repeat, speed persists, and card edits preserve progress'
   await page.getByRole('slider', { name: 'Speed', exact: true }).fill('3');
   await expect(page.locator('.run-heading [role=status]')).toContainText('Unanswered 3', { timeout: 30000 });
   await expect(page.locator('.run-endline')).toHaveText('Endline - Starting again');
+  await expect.poll(async () => JSON.parse((await page.locator('.run-scene').getAttribute('data-stones'))!).filter((stone: { shattered: boolean }) => stone.shattered).length).toBeGreaterThan(0);
   await page.getByRole('button', { name: '← Decks' }).click();
   const original = await backup(page);
   expect(original.data.progress.reduce((sum: number, item: { unanswered: number }) => sum + item.unanswered, 0)).toBeGreaterThanOrEqual(3);
@@ -175,9 +176,10 @@ test('portrait previews stay fixed and trios drop at the configured near distanc
   const distanceUntilDrop = -oldStone(state).position[2] + state.camera - near * .7;
   await page.clock.runFor(Math.max(0, Math.floor(distanceUntilDrop / 15 * 1000) - 50));
   expect(oldStone(await read()).position[1]).toBe(oldStone(answeredStart).position[1]);
+  expect((await read()).stones.find(stone => stone.id === before.stones[3].id)?.written).toBe(true);
   await page.clock.runFor(300);
   expect(oldStone(await read()).position[1]).toBeLessThan(oldStone(answeredStart).position[1]);
-  expect((await read()).stones.find(stone => stone.id === before.stones[3].id)?.written).toBe(false);
+  expect((await read()).stones.find(stone => stone.id === before.stones[3].id)?.written).toBe(true);
   await page.clock.runFor(800);
   expect((await read()).stones.find(stone => stone.id === before.stones[3].id)?.written).toBe(true);
 

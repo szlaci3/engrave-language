@@ -68,5 +68,6 @@ multiple of the viewport-dependent review near distance. The camera continues pa
 answered trios. Speed ranges from 0.1× to 3× in 0.1 increments.
 
 Following trios show blank stone faces (also in reflections) until the foremost
-trio finishes dropping. Hidden questions cannot be answered or autoplayed.
+trio reaches its ×1 answer cutoff, before dropping starts at ×0.7. Hidden questions cannot be answered or autoplayed. On an unanswered question,
+the wrong answer breaks into 40 falling fragments and fades out in 0.65 seconds.
 The speed slider spans its control bar with 0.4 opacity over a centred speed label.
