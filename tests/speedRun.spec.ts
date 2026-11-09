@@ -38,6 +38,10 @@ for (const width of [390, 1280]) test(`speed run selects decks, keeps moving and
   await expect(page.locator('.run-stage .run-prompt button')).toBeVisible();
   await page.getByRole('slider', { name: 'Speed', exact: true }).fill('0.1');
   await page.getByRole('slider', { name: 'Speed', exact: true }).blur();
+  await expect(page.getByRole('slider', { name: 'Speed', exact: true })).toHaveCSS('opacity', '0.4');
+  const bar = await page.locator('.run-toolbar').boundingBox();
+  const slider = await page.getByRole('slider', { name: 'Speed', exact: true }).boundingBox();
+  expect(slider!.width).toBeCloseTo(bar!.width, 0);
   const prompt = await page.locator('.run-stage .run-prompt').innerText();
   const correct = ({ '水': 'water', '书': 'boek', '世界': 'wereld' } as Record<string, string>)[prompt];
   const buttons = page.locator('.run-stage .run-answers button');
@@ -112,6 +116,10 @@ test('speed run reads prompts first and answers only after a choice', async ({ p
   await expect(page.locator('.run-stage .run-prompt button')).toBeVisible();
   await page.getByRole('slider', { name: 'Speed', exact: true }).fill('0.1');
   await page.getByRole('slider', { name: 'Speed', exact: true }).blur();
+  await expect(page.getByRole('slider', { name: 'Speed', exact: true })).toHaveCSS('opacity', '0.4');
+  const bar = await page.locator('.run-toolbar').boundingBox();
+  const slider = await page.getByRole('slider', { name: 'Speed', exact: true }).boundingBox();
+  expect(slider!.width).toBeCloseTo(bar!.width, 0);
   const prompt = await page.locator('.run-stage .run-prompt').innerText();
   const spoken = () => page.evaluate(() => (window as unknown as { spoken: string[] }).spoken);
   await expect.poll(spoken).toEqual([prompt]);
@@ -133,9 +141,11 @@ test('portrait previews stay fixed and trios drop at the configured near distanc
   await page.getByRole('slider', { name: 'Speed', exact: true }).fill('0.1');
   await page.getByRole('slider', { name: 'Speed', exact: true }).blur();
   await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 1000));
-  const read = async () => ({ camera: Number(await scene.getAttribute('data-camera-z')), stones: JSON.parse((await scene.getAttribute('data-stones'))!) as { id: number; position: number[] }[] });
+  const read = async () => ({ camera: Number(await scene.getAttribute('data-camera-z')), stones: JSON.parse((await scene.getAttribute('data-stones'))!) as { id: number; position: number[]; written: boolean }[] });
   const before = await read();
   expect(before.stones).toHaveLength(6);
+  expect(before.stones.slice(0, 3).every(stone => stone.written)).toBe(true);
+  expect(before.stones.slice(3).every(stone => !stone.written)).toBe(true);
   expect(before.stones.slice(0, 3).map(stone => stone.position[0])).toEqual([0, 0, 0]);
   expect(before.stones[1].position[1]).toBeGreaterThan(before.stones[0].position[1]);
   expect(before.stones[2].position[1]).toBeLessThan(before.stones[0].position[1]);
@@ -148,6 +158,7 @@ test('portrait previews stay fixed and trios drop at the configured near distanc
   const answeredStart = await read();
   await page.clock.runFor(400);
   const answeredEnd = await read();
+  expect(answeredEnd.stones.find(stone => stone.id === before.stones[3].id)?.written).toBe(false);
   const oldStone = (state: typeof answeredStart) => state.stones.find(stone => stone.id === before.stones[1].id)!;
   expect(oldStone(answeredEnd).position).toEqual(oldStone(answeredStart).position);
   expect(answeredEnd.camera).toBeLessThan(answeredStart.camera);
@@ -166,5 +177,8 @@ test('portrait previews stay fixed and trios drop at the configured near distanc
   expect(oldStone(await read()).position[1]).toBe(oldStone(answeredStart).position[1]);
   await page.clock.runFor(300);
   expect(oldStone(await read()).position[1]).toBeLessThan(oldStone(answeredStart).position[1]);
+  expect((await read()).stones.find(stone => stone.id === before.stones[3].id)?.written).toBe(false);
+  await page.clock.runFor(800);
+  expect((await read()).stones.find(stone => stone.id === before.stones[3].id)?.written).toBe(true);
 
 });

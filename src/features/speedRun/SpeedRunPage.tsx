@@ -93,13 +93,14 @@ function Run({ entries, direction, exit }: { entries: VocabularyEntry[]; directi
       next();
     };
     choose.current = (side, x, y) => {
+      if (!world?.isRunStoneWritten(serial * 3)) return;
       if (x !== undefined && y !== undefined && world?.pickRunStone(x, y) !== serial * 3 + side + 1) return;
       answer(side);
     };
     const keyboard = (event: KeyboardEvent) => {
       if (event.repeat || event.ctrlKey || event.altKey || event.metaKey || (event.target instanceof HTMLElement && event.target.closest('input,select,textarea,[contenteditable]'))) return;
       const key = event.key.toLowerCase();
-      if (['a', 'd', 'arrowleft', 'arrowright'].includes(key)) { event.preventDefault(); answer(key === 'a' || key === 'arrowleft' ? 0 : 1); }
+      if (['a', 'd', 'arrowleft', 'arrowright'].includes(key)) { event.preventDefault(); choose.current(key === 'a' || key === 'arrowleft' ? 0 : 1); }
     };
     const tick = (time: number) => {
       if (!active) return;
@@ -118,11 +119,12 @@ function Run({ entries, direction, exit }: { entries: VocabularyEntry[]; directi
       const buttons = approaching.current?.querySelectorAll<HTMLButtonElement>('button');
       rectangles.filter(rect => rect.id >= serial * 3 && rect.id < (serial + 1) * 3).forEach((rect, i) => {
         const button = buttons?.[i];
+        if (button) button.hidden = !rect.written;
         if (button) Object.assign(button.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` });
       });
       if (host.current) host.current.dataset.position = distance.toFixed(3);
 
-      if (current && !answered && elapsed >= promptAt) {
+      if (current && !answered && elapsed >= promptAt && world?.isRunStoneWritten(serial * 3)) {
         promptAt = Infinity;
         const mode = getVoicePreferences().audioAutoplay;
         if (mode === 'front' || mode === 'both') audio(current.prompt, direction === 'zh-nl' ? 'zh' : 'nl');
@@ -149,7 +151,7 @@ function Run({ entries, direction, exit }: { entries: VocabularyEntry[]; directi
     <header className="run-heading"><button onClick={exit}>← Decks</button><h1>Speed Run</h1><p role="status">Correct {counts.correct} · Mistakes {counts.mistake} · Unanswered {counts.unanswered}</p><p className="run-endline">{notice}</p>{error && <p role="alert">{error}</p>}</header>
     <div className={`run-stage${feedbackList.length ? ' run-stage-with-feedback' : ''}`} ref={approaching}>{trio && <TrioView trio={trio} choose={(side, event) => choose.current(side, event.detail === 0 ? undefined : event.clientX, event.detail === 0 ? undefined : event.clientY)} />}</div>
     <div ref={history}>{feedbackList.map(item => <div className="run-feedback-history" key={item.id} data-born={item.born} ><TrioView trio={item} feedback /></div>)}</div>
-    <footer className="run-toolbar"><label>Speed {speed.toFixed(2)}× <input aria-label="Speed" type="range" min="0.1" max="3" step="0.1" value={speed} onChange={event => { const value = Number(event.target.value); setSpeed(value); speedRef.current = value; void db.settings.put({ key: 'speed-run-speed', value: String(value), updatedAt: new Date().toISOString() }).catch(() => setError('Could not save speed.')); }} /></label><span>A / ← Upper · D / → Lower</span></footer>
+    <footer className="run-toolbar"><label><span className="run-speed-text">Speed {speed.toFixed(1)}×</span><input aria-label="Speed" type="range" min="0.1" max="3" step="0.1" value={speed} onChange={event => { const value = Number(event.target.value); setSpeed(value); speedRef.current = value; void db.settings.put({ key: 'speed-run-speed', value: String(value), updatedAt: new Date().toISOString() }).catch(() => setError('Could not save speed.')); }} /></label><span className="run-key-hints">A / ← Upper · D / → Lower</span></footer>
   </main>;
 }
 export function SpeedRunPage() {

@@ -66,3 +66,7 @@ projected mesh faces for tapping and keyboard focus.
 `SPEED_RUN_NEAR_DISTANCE_MULTIPLIER = 1` sets the unanswered-decision distance as a
 multiple of the viewport-dependent review near distance. The camera continues past
 answered trios. Speed ranges from 0.1× to 3× in 0.1 increments.
+
+Following trios show blank stone faces (also in reflections) until the foremost
+trio finishes dropping. Hidden questions cannot be answered or autoplayed.
+The speed slider spans its control bar with 0.4 opacity over a centred speed label.

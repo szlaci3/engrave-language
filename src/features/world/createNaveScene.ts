@@ -101,6 +101,8 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   const bookMeshes = new Map<number, THREE.Group>();
   const bookDrops = new Map<number, number>();
   const runDropStarts = new Map<number, number>();
+  const runWrittenTextures = new Map<number, THREE.Texture>();
+  const runBlankTextures = new Map<Flashcard['language'], THREE.Texture>();
   const runMaterials = new Map<number, THREE.Material[]>();
   const reflectedStones = new THREE.Scene();
   reflectedStones.fog = scene.fog;
@@ -152,7 +154,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   const heldKeys = new Set<string>();
   const stoneBackgrounds = new Map<Flashcard['language'], HTMLCanvasElement>();
   const covers = new Map<string, { title: string; language: Flashcard['language']; material: THREE.MeshBasicMaterial }>();
-  const placeholder = (book: Flashcard) => {
+  const placeholder = (book: Flashcard, written = true) => {
     // Match the face aspect ratio so glyphs retain their natural proportions.
     const canvas = document.createElement('canvas');
     const width = 1024, height = Math.round(width * stoneHeight / 5.3);
@@ -193,6 +195,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
       background.getContext('2d')!.drawImage(canvas, 0, 0);
       stoneBackgrounds.set(book.language, background);
     }
+    if (!written) { const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; return texture; }
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = chinese ? '#f7f3e8' : '#273238';
     ctx.font = '22px sans-serif'; ctx.fillText(chinese ? '中文' : 'NEDERLANDS', width / 2, 65);
@@ -267,9 +270,10 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   function removeBook(id: number, group: THREE.Group) {
     scene.remove(group);
     for (const material of runMaterials.get(id) ?? []) {
-      if (material instanceof THREE.MeshBasicMaterial) material.map?.dispose();
+
       material.dispose();
     }
+    runWrittenTextures.get(id)?.dispose(); runWrittenTextures.delete(id);
     runMaterials.delete(id); runDropStarts.delete(id);
     reflectedStones.remove(reflectionMeshes.get(id)!); reflectionMeshes.delete(id);
     bookMeshes.delete(id); bookDrops.delete(id);
@@ -406,6 +410,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   observer.observe(host); invalidate();
   const runRaycaster = new THREE.Raycaster();
   return {
+    isRunStoneWritten(id: number) { return bookMeshes.get(id)?.userData.written === true; },
     pickRunStone(clientX: number, clientY: number) {
       const bounds = renderer.domElement.getBoundingClientRect();
       runRaycaster.setFromCamera(new THREE.Vector2((clientX - bounds.left) / bounds.width * 2 - 1, 1 - (clientY - bounds.top) / bounds.height * 2), camera);
@@ -422,6 +427,8 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
           group.userData.runId = stone.id;
           const body = (stone.language === 'zh' ? blueStone : whiteStone).clone();
           const face = new THREE.MeshBasicMaterial({ map: placeholder({ id: String(stone.id), title: stone.title, language: stone.language }) });
+          runWrittenTextures.set(stone.id, face.map!);
+          if (!runBlankTextures.has(stone.language)) runBlankTextures.set(stone.language, keep(placeholder({ id: '', title: '', language: stone.language }, false)));
           group.add(new THREE.Mesh(bookGeometry, body));
           const cover = new THREE.Mesh(frontGeometry, face); cover.position.z = BOOK_THICKNESS / 2 + .005; group.add(cover);
           runMaterials.set(stone.id, [body, face]);
@@ -438,15 +445,22 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
           if (material instanceof THREE.MeshBasicMaterial) material.color.set(stone.tint ?? '#ffffff');
         }
       }
+      const nearest = Math.min(...stones.filter(stone => bookMeshes.get(stone.id)!.visible).map(stone => stone.station));
+      for (const stone of stones) {
+        const group = bookMeshes.get(stone.id)!;
+        group.userData.written = stone.station === nearest;
+        const face = runMaterials.get(stone.id)![1] as THREE.MeshBasicMaterial;
+        face.map = group.userData.written ? runWrittenTextures.get(stone.id)! : runBlankTextures.get(stone.language)!;
+      }
       position = distance; render(0);
       host.dataset.nearDistance = String(nearDistance);
       host.dataset.cameraZ = String(camera.position.z);
-      host.dataset.stones = JSON.stringify([...bookMeshes].map(([id, group]) => ({ id, position: group.position.toArray(), visible: group.visible })));
+      host.dataset.stones = JSON.stringify([...bookMeshes].map(([id, group]) => ({ id, position: group.position.toArray(), visible: group.visible, written: group.userData.written })));
       return stones.map(stone => {
         const group = bookMeshes.get(stone.id)!;
         const a = new THREE.Vector3(-2.65, .825, .36).add(group.position).project(camera);
         const b = new THREE.Vector3(2.65, -.825, .36).add(group.position).project(camera);
-        return { id: stone.id, left: (a.x + 1) * host.clientWidth / 2, top: (1 - a.y) * host.clientHeight / 2, width: (b.x - a.x) * host.clientWidth / 2, height: (a.y - b.y) * host.clientHeight / 2 };
+        return { id: stone.id, written: group.userData.written as boolean, left: (a.x + 1) * host.clientWidth / 2, top: (1 - a.y) * host.clientHeight / 2, width: (b.x - a.x) * host.clientWidth / 2, height: (a.y - b.y) * host.clientHeight / 2 };
       });
     },
     update(next: Flashcard[], reset: boolean) {
