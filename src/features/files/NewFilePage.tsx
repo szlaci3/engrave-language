@@ -3,6 +3,7 @@ import { routes } from '../../app/routes';
 import { createVocabularyFile } from '../../db/vocabularyRepository';
 import { useUiLanguage } from '../settings/uiLanguage';
 import { parseVocabulary } from './parseVocabulary';
+import { parseCardJson } from './parseCardJson';
 
 function formatLocalDate(date: Date) {
   const year = date.getFullYear();
@@ -52,7 +53,25 @@ export function NewFilePage() {
   }
   const [message, setMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const parsedPreview = useMemo(() => parseVocabulary(rawText), [rawText]);
+  const parsedPreview = useMemo(() => {
+    if (/^[\s\uFEFF]*[[{]/u.test(rawText)) {
+      try { return { entries: parseCardJson(rawText), skippedLines: [], json: true, error: '' }; }
+      catch (error) { return { entries: [], skippedLines: [], json: true, error: (error as Error).message }; }
+    }
+    return { ...parseVocabulary(rawText), json: false, error: '' };
+  }, [rawText]);
+
+  async function uploadJson(file: File | undefined) {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      parseCardJson(text); // Validate before replacing the current draft.
+      saveDraft({ ...draft, rawText: text });
+      setMessage('');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not read the JSON file.');
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -62,7 +81,7 @@ export function NewFilePage() {
     }
 
     if (parsedPreview.entries.length === 0) {
-      setMessage(t('pasteValidLine'));
+      setMessage(parsedPreview.error || t('pasteValidLine'));
       return;
     }
 
@@ -71,7 +90,7 @@ export function NewFilePage() {
 
     try {
       const savedFile = await createVocabularyFile({
-        title: title.trim() || createFileTitle(parsedPreview.entries[0].dutch),
+        title: title.trim() || createFileTitle(parsedPreview.entries[0].dutch || parsedPreview.entries[0].chinese),
         entries: parsedPreview.entries,
       });
 
@@ -116,6 +135,9 @@ export function NewFilePage() {
         <label className="field-label" htmlFor="deck-title">{t('fileTitle')}</label>
         <input className="text-input" id="deck-title" value={title} placeholder={language === 'zh' ? '可选，留空则自动生成标题' : 'Optional — generated from the first word if empty'} onChange={e => saveDraft({ ...draft, title: e.target.value })} />
         <p className="form-hint" role="status">{draftStatus || (language === 'zh' ? '输入时自动保存草稿到此设备。' : 'Your draft is saved on this device as you type.')}</p>
+        <label className="field-label" htmlFor="card-json-upload">{language === 'zh' ? '上传卡片 JSON' : 'Upload card JSON'}</label>
+        <input id="card-json-upload" type="file" accept=".json,application/json" disabled={isSaving} onChange={event => { void uploadJson(event.target.files?.[0]); event.target.value = ''; }} />
+        <p className="form-hint">{language === 'zh' ? '也可在下方粘贴 JSON。每张卡片的前两面依次为英语、荷兰语；英语显示在中文一面。' : 'Or paste JSON below. The first two sides of each card are English, then Dutch; English appears on the Chinese side.'}</p>
         <label className="field-label" htmlFor={textareaId}>
           {t('vocabularyText')}
         </label>
@@ -130,10 +152,10 @@ export function NewFilePage() {
 
         {rawText.trim() ? (
           <p className="form-hint" aria-live="polite">
-            {t('validLines', {
+            {parsedPreview.error || (parsedPreview.json ? `${parsedPreview.entries.length} ${language === 'zh' ? '张卡片可导入' : 'cards ready to import'}` : t('validLines', {
               count: parsedPreview.entries.length,
               skipped: parsedPreview.skippedLines.length,
-            })}
+            }))}
           </p>
         ) : null}
 
