@@ -54,3 +54,8 @@ relative to the camera at 50% opacity, then fall away. Progress is saved by stab
 card ID and language direction in Dexie and included in version 3 backups. Older
 backups remain importable. Deck editing now changes only the title; edit vocabulary
 pairs in 3D review to retain their IDs and history.
+
+Speed Run stones use the same Three.js slab geometry, engraved canvas textures,
+lighting, and floor reflections as 3D review. Trios have fixed world positions;
+the camera advances through the aisle. Invisible accessible buttons follow the
+projected mesh faces for tapping and keyboard focus.

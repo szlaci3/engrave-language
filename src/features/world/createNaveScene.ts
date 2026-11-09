@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import type { Flashcard } from './flashcards';
 import { BOOK_SPACING, BOOK_THICKNESS, VISIBLE_BOOK_COUNT, REPEAT_PREVIEW_REMAINING, PASSED_BOOK_CACHE_COUNT, advanceBookDrop, WALK_SPEED, deckIndex, currentBookIndex, isMovementTarget, adjacentStone } from './navigation';
 
+export type RunStone = { id: number; title: string; language: 'nl' | 'zh'; x: number; y: number; station: number; opacity: number; tint?: string };
 const MAX_STEP_COUNT = 4;
 
 export function createNaveScene(host: HTMLElement, onCurrent: (index: number) => void, onError: () => void, onComplete: () => void, sceneryOnly = false) {
@@ -98,6 +99,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   const frontGeometry = keep(new THREE.PlaneGeometry(5.3, stoneHeight));
   const bookMeshes = new Map<number, THREE.Group>();
   const bookDrops = new Map<number, number>();
+  const runMaterials = new Map<number, THREE.Material[]>();
   const reflectedStones = new THREE.Scene();
   reflectedStones.fog = scene.fog;
   for (const child of scene.children) if (child instanceof THREE.Light) reflectedStones.add(child.clone());
@@ -262,6 +264,11 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   }
   function removeBook(id: number, group: THREE.Group) {
     scene.remove(group);
+    for (const material of runMaterials.get(id) ?? []) {
+      if (material instanceof THREE.MeshBasicMaterial) material.map?.dispose();
+      material.dispose();
+    }
+    runMaterials.delete(id);
     reflectedStones.remove(reflectionMeshes.get(id)!); reflectionMeshes.delete(id);
     bookMeshes.delete(id); bookDrops.delete(id);
   }
@@ -281,8 +288,9 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   function render(delta: number) {
     if (disposed) return false;
     let animating = false;
-    nave.position.z = ((position % 10) + 10) % 10;
-    floor.position.z = -80 + ((position % 4) + 4) % 4;
+    camera.position.z = sceneryOnly ? -position : 0;
+    nave.position.z = sceneryOnly ? -Math.floor(position / 10) * 10 : ((position % 10) + 10) % 10;
+    floor.position.z = sceneryOnly ? -80 - Math.floor(position / 4) * 4 : -80 + ((position % 4) + 4) % 4;
     if (!books.length) { renderer.render(scene, camera); return false; }
     const index = currentBookIndex(position);
     if (index !== current) {
@@ -395,7 +403,37 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   wallpaper.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
   observer.observe(host); invalidate();
   return {
-    tour(distance: number) { position = distance; render(0); },
+    tour(distance: number, stones: RunStone[] = []) {
+      const ids = new Set(stones.map(stone => stone.id));
+      for (const [id, group] of bookMeshes) if (!ids.has(id)) removeBook(id, group);
+      for (const stone of stones) {
+        let group = bookMeshes.get(stone.id);
+        if (!group) {
+          group = new THREE.Group();
+          const body = (stone.language === 'zh' ? blueStone : whiteStone).clone();
+          const face = new THREE.MeshBasicMaterial({ map: placeholder({ id: String(stone.id), title: stone.title, language: stone.language }) });
+          group.add(new THREE.Mesh(bookGeometry, body));
+          const cover = new THREE.Mesh(frontGeometry, face); cover.position.z = BOOK_THICKNESS / 2 + .005; group.add(cover);
+          runMaterials.set(stone.id, [body, face]);
+          bookMeshes.set(stone.id, group); scene.add(group);
+          const reflected = group.clone(); reflectionMeshes.set(stone.id, reflected); reflectedStones.add(reflected);
+        }
+        group.position.set(stone.x, stone.y, -stone.station - nearDistance * 2.1);
+        for (const material of runMaterials.get(stone.id)!) {
+          material.transparent = stone.opacity < 1; material.opacity = stone.opacity; material.depthWrite = stone.opacity === 1;
+          if (material instanceof THREE.MeshBasicMaterial) material.color.set(stone.tint ?? '#ffffff');
+        }
+      }
+      position = distance; render(0);
+      host.dataset.cameraZ = String(camera.position.z);
+      host.dataset.stones = JSON.stringify([...bookMeshes].map(([id, group]) => ({ id, position: group.position.toArray(), visible: group.visible })));
+      return stones.map(stone => {
+        const group = bookMeshes.get(stone.id)!;
+        const a = new THREE.Vector3(-2.65, .825, .36).add(group.position).project(camera);
+        const b = new THREE.Vector3(2.65, -.825, .36).add(group.position).project(camera);
+        return { id: stone.id, left: (a.x + 1) * host.clientWidth / 2, top: (1 - a.y) * host.clientHeight / 2, width: (b.x - a.x) * host.clientWidth / 2, height: (a.y - b.y) * host.clientHeight / 2 };
+      });
+    },
     update(next: Flashcard[], reset: boolean) {
       clearBooks(); books = next;
       if (reset) { position = 0; current = Number.NaN; stop(); }

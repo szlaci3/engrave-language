@@ -35,7 +35,7 @@ for (const width of [390, 1280]) test(`speed run selects decks, keeps moving and
   await page.getByRole('button', { name: 'Select all', exact: true }).click();
   await expect(page.locator('.run-deck')).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Play', exact: true }).click();
-  await expect(page.locator('.run-stage .run-prompt')).toBeVisible();
+  await expect(page.locator('.run-stage .run-prompt button')).toBeVisible();
   const prompt = await page.locator('.run-stage .run-prompt').innerText();
   const correct = ({ '水': 'water', '书': 'boek', '世界': 'wereld' } as Record<string, string>)[prompt];
   const buttons = page.locator('.run-stage .run-answers button');
@@ -70,7 +70,7 @@ test('unanswered cards repeat, speed persists, and card edits preserve progress'
   await page.goto('/speed-run');
   await page.getByRole('button', { name: 'Select all', exact: true }).click();
   await page.getByRole('button', { name: 'Play', exact: true }).click();
-  await expect(page.locator('.run-stage .run-prompt')).toBeVisible();
+  await expect(page.locator('.run-stage .run-prompt button')).toBeVisible();
   await page.getByRole('slider', { name: 'Speed', exact: true }).fill('3');
   await expect(page.locator('.run-heading [role=status]')).toContainText('Unanswered 3', { timeout: 30000 });
   await expect(page.locator('.run-endline')).toHaveText('Endline - Starting again');
@@ -107,7 +107,7 @@ test('speed run reads prompts first and answers only after a choice', async ({ p
   await page.goto('/speed-run');
   await page.getByRole('button', { name: 'Select all', exact: true }).click();
   await page.getByRole('button', { name: 'Play', exact: true }).click();
-  await expect(page.locator('.run-stage .run-prompt')).toBeVisible();
+  await expect(page.locator('.run-stage .run-prompt button')).toBeVisible();
   const prompt = await page.locator('.run-stage .run-prompt').innerText();
   const spoken = () => page.evaluate(() => (window as unknown as { spoken: string[] }).spoken);
   await expect.poll(spoken).toEqual([prompt]);
@@ -116,4 +116,32 @@ test('speed run reads prompts first and answers only after a choice', async ({ p
   await page.keyboard.press(leftCorrect ? 'd' : 'a');
   await expect(page.locator('.run-heading [role=status]')).toContainText('Mistakes 1');
   await expect.poll(async () => (await spoken()).slice(0, 2)).toEqual([prompt, correct]);
+});
+
+test('3D trios stay fixed in the aisle and ghosts follow the camera', async ({ page }) => {
+  await page.clock.install();
+  await deck(page);
+  await page.goto('/speed-run');
+  await page.getByRole('button', { name: 'Select all', exact: true }).click();
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  const scene = page.locator('.run-scene');
+  await expect(scene).toHaveAttribute('data-stones', /position/);
+  await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 1000));
+  const read = async () => ({ camera: Number(await scene.getAttribute('data-camera-z')), stones: JSON.parse((await scene.getAttribute('data-stones'))!) as { id: number; position: number[] }[] });
+  const before = await read();
+  expect(before.stones).toHaveLength(3);
+  await page.clock.runFor(400);
+  const after = await read();
+  expect(after.camera).toBeLessThan(before.camera);
+  expect(after.stones).toEqual(before.stones);
+  await page.keyboard.press('a');
+  await page.clock.runFor(400);
+  const ghostStart = await read();
+  await page.clock.runFor(400);
+  const ghostEnd = await read();
+  const oldStone = (state: typeof ghostStart) => state.stones.find(stone => stone.id === before.stones[1].id)!;
+  expect(oldStone(ghostEnd).position[2] - ghostEnd.camera).toBeCloseTo(oldStone(ghostStart).position[2] - ghostStart.camera, 5);
+  expect(oldStone(ghostEnd).position[1]).toBe(oldStone(ghostStart).position[1]);
+  await page.clock.runFor(1400);
+  expect(oldStone(await read()).position[1]).toBeLessThan(oldStone(ghostStart).position[1]);
 });

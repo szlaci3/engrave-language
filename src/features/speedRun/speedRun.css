@@ -11,34 +11,18 @@
 .run-heading h1 { font-size:22px; margin:8px 0; }
 .run-heading p { margin:5px 0; font-size:14px; }
 .run-endline { font-weight:700; }
-.run-stage,.run-ghost-stage { position:absolute; top:39%; left:3%; width:94%; max-width:940px; margin:auto; right:3%; transform-origin:center center; }
-.run-ghost-stage { pointer-events:none; z-index:3; opacity:.5; }
-.run-prompt { width:48%; margin:0 auto 22px; transition:transform .3s ease; }
-.run-trio[data-chosen="0"] .run-prompt { transform:translateX(-54%); }
-.run-trio[data-chosen="1"] .run-prompt { transform:translateX(54%); }
-.run-answers { display:grid; grid-template-columns:1fr 1fr; gap:4%; }
-.run-stone { width:100%; height:clamp(104px,17vh,180px); padding:12px; border:6px ridge #b4b1a0; border-radius:2px; background:repeating-linear-gradient(173deg,#c4c0ac33 0px,#ebe8d433 2px,transparent 4px),linear-gradient(110deg,#d9d5c0,#b7b39e); box-shadow:0 8px 0 #85877c,0 13px 15px #17354d55,inset 0 0 18px #6d6d5040; color:#273238; cursor:pointer; display:flex; align-items:center; justify-content:center; }
-.run-stone:disabled { opacity:1; cursor:default; }
-.run-stone span { display:block; max-width:100%; max-height:100%; overflow-wrap:normal; line-height:1.12; }
-.run-prompt .run-stone { background:linear-gradient(120deg,#5d7480,#354953); color:#fff7df; border-color:#78909b; }
-.run-correct { outline:6px solid #19834a; background:#c7e8bb; }
-.run-wrong { outline:6px solid #bd3636; background:#f1b9ad; }
-.run-feedback { text-align:center; font-weight:800; background:#ffffffed; padding:8px; border-radius:8px; }
 .run-toolbar { position:absolute; bottom:max(12px,env(safe-area-inset-bottom)); left:4%; right:4%; background:#e9f5f9e8; border-radius:14px; padding:14px; display:flex; gap:16px; justify-content:space-between; align-items:center; }
 .run-toolbar label { display:flex; align-items:center; gap:10px; }
 .run-toolbar input { width:min(35vw,260px); }
 .run-toolbar span { font-size:13px; }
 @media (pointer:coarse) { .run-toolbar span { display:none; } }
-@media (max-height:500px) { .run-stage,.run-ghost-stage { top:28%; } .run-stone { height:78px; } .run-prompt { margin-bottom:12px; } .run-heading h1 { display:none; } }
-.run-ghost[data-chosen="0"] .run-prompt { animation:choose-left .3s ease-out; }
-.run-ghost[data-chosen="1"] .run-prompt { animation:choose-right .3s ease-out; }
-@keyframes choose-left { from { transform:translateX(0); } to { transform:translateX(-54%); } }
-@keyframes choose-right { from { transform:translateX(0); } to { transform:translateX(54%); } }
-/* Feedback occupies the upper reading area while the next trio approaches below. */
-.run-ghost-stage { top:20%; }
-.run-stage { transition:top .3s ease; }
-.run-stage-with-feedback { top:53%; }
-@media (max-height:500px) {
-  .run-ghost-stage { top:12%; left:2%; right:auto; width:45%; }
-  .run-stage-with-feedback { top:28%; left:auto; right:2%; width:45%; }
-}
+@media (max-height:500px) { .run-heading h1 { display:none; } }
+/* Transparent accessible hit targets track the projected Three.js mesh faces. */
+.run-stage,.run-stage-with-feedback { position:absolute; inset:0; width:100%; max-width:none; margin:0; transform:none; transition:none; pointer-events:none; }
+.run-stage .run-prompt,.run-stage .run-answers,.run-stage .run-trio { display:contents; }
+.run-stage .run-stone { position:absolute; pointer-events:auto; padding:0; border:0; background:none; box-shadow:none; color:transparent; opacity:1; }
+.run-stage .run-stone span { opacity:0; }
+.run-stage .run-stone:disabled { pointer-events:none; }
+.run-ghost-stage { display:none; }
+
+.run-stage .run-stone:focus-visible { outline:3px solid #216b9b; }
