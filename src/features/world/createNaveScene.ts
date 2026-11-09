@@ -403,7 +403,14 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   fitWallpaper(wallpaper);
   wallpaper.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
   observer.observe(host); invalidate();
+  const runRaycaster = new THREE.Raycaster();
   return {
+    pickRunStone(clientX: number, clientY: number) {
+      const bounds = renderer.domElement.getBoundingClientRect();
+      runRaycaster.setFromCamera(new THREE.Vector2((clientX - bounds.left) / bounds.width * 2 - 1, 1 - (clientY - bounds.top) / bounds.height * 2), camera);
+      const hit = runRaycaster.intersectObjects([...bookMeshes.values()], true)[0];
+      return hit?.object.parent?.userData.runId as number | undefined;
+    },
     tour(distance: number, stones: RunStone[] = []) {
       const ids = new Set(stones.map(stone => stone.id));
       for (const [id, group] of bookMeshes) if (!ids.has(id)) removeBook(id, group);
@@ -411,6 +418,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
         let group = bookMeshes.get(stone.id);
         if (!group) {
           group = new THREE.Group();
+          group.userData.runId = stone.id;
           const body = (stone.language === 'zh' ? blueStone : whiteStone).clone();
           const face = new THREE.MeshBasicMaterial({ map: placeholder({ id: String(stone.id), title: stone.title, language: stone.language }) });
           group.add(new THREE.Mesh(bookGeometry, body));

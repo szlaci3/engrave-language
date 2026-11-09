@@ -48,9 +48,10 @@ mobile. The aisle moves continuously at adjustable speed. There is no round time
 Unanswered questions count separately from mistakes. At the end of the selected
 material, the run displays “Endline - Starting again” and shuffles another lap.
 
-`SPEED_RUN_TRIO_SPACING = 25.2` world units (7 × normal 3.6-unit spacing) and
-`GHOST_SECONDS = 2` are in `src/features/speedRun/model.ts`. Feedback trios freeze
-relative to the camera at 50% opacity, then fall away. Progress is saved by stable
+`SPEED_RUN_TRIO_SPACING = 9` world units and
+the portrait layout constants are in `src/features/speedRun/model.ts`. Answers are
+above and below the prompt. Answered trios remain opaque at fixed world positions
+as the camera passes; ghost holding and dropping are disabled. Progress is saved by stable
 card ID and language direction in Dexie and included in version 3 backups. Older
 backups remain importable. Deck editing now changes only the title; edit vocabulary
 pairs in 3D review to retain their IDs and history.
@@ -60,5 +61,6 @@ lighting, and floor reflections as 3D review. Trios have fixed world positions;
 the camera advances through the aisle. Invisible accessible buttons follow the
 projected mesh faces for tapping and keyboard focus.
 
-`SPEED_RUN_NEAR_DISTANCE_MULTIPLIER = 0.9` controls the closest trio depth as a
-multiple of the viewport-dependent review near distance.
+`SPEED_RUN_NEAR_DISTANCE_MULTIPLIER = 1` sets the unanswered-decision distance as a
+multiple of the viewport-dependent review near distance. The camera continues past
+answered trios. Speed ranges from 0.1× to 3× in 0.1 increments.

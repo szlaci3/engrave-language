@@ -1,8 +1,11 @@
 import type { VocabularyEntry } from '../files/types';
 
-export const SPEED_RUN_NEAR_DISTANCE_MULTIPLIER = 0.9;
-export const SPEED_RUN_TRIO_SPACING = 25.2;
-export const GHOST_SECONDS = 2;
+export const SPEED_RUN_NEAR_DISTANCE_MULTIPLIER = 1;
+export const SPEED_RUN_TRIO_SPACING = 9;
+export const ANSWER_AUDIO_DELAY_SECONDS = 2;
+export const SPEED_RUN_ANSWER_OFFSET = 2.325;
+// 1.65-unit stone height leaves a 0.25-unit gap after the prompt moves.
+export const SPEED_RUN_PROMPT_MOVE = 0.425;
 export type Direction = 'zh-nl' | 'nl-zh';
 export type Outcome = 'correct' | 'mistake' | 'unanswered';
 export type Progress = { id: string; entryId: string; direction: Direction; correct: number; mistakes: number; unanswered: number; lastPracticed: string };

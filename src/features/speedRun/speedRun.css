@@ -23,6 +23,6 @@
 .run-stage .run-stone { position:absolute; pointer-events:auto; padding:0; border:0; background:none; box-shadow:none; color:transparent; opacity:1; }
 .run-stage .run-stone span { opacity:0; }
 .run-stage .run-stone:disabled { pointer-events:none; }
-.run-ghost-stage { display:none; }
+.run-feedback-history { display:none; }
 
 .run-stage .run-stone:focus-visible { outline:3px solid #216b9b; }

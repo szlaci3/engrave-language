@@ -21,7 +21,7 @@ async function backup(page: Page) {
 
 test('distractors use nearest Dutch length and exclude ambiguous answers', () => {
   const entries = ['water', 'boek', 'een hele lange zin', 'water'].map((dutch, i) => ({ id: String(i), fileId: 'deck', order: i, dutch, chinese: ['水', '书', '句子', '水'][i] }));
-  expect(SPEED_RUN_TRIO_SPACING).toBe(25.2);
+  expect(SPEED_RUN_TRIO_SPACING).toBe(9);
   for (let i = 0; i < 20; i++) expect(makeQuestion(entries[0], entries, 'zh-nl')?.answers.sort()).toEqual(['boek', 'water']);
   expect(makeQuestion(entries[0], [entries[0], entries[3]], 'zh-nl')).toBeNull();
 });
@@ -36,6 +36,8 @@ for (const width of [390, 1280]) test(`speed run selects decks, keeps moving and
   await expect(page.locator('.run-deck')).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   await expect(page.locator('.run-stage .run-prompt button')).toBeVisible();
+  await page.getByRole('slider', { name: 'Speed', exact: true }).fill('0.1');
+  await page.getByRole('slider', { name: 'Speed', exact: true }).blur();
   const prompt = await page.locator('.run-stage .run-prompt').innerText();
   const correct = ({ '水': 'water', '书': 'boek', '世界': 'wereld' } as Record<string, string>)[prompt];
   const buttons = page.locator('.run-stage .run-answers button');
@@ -44,7 +46,7 @@ for (const width of [390, 1280]) test(`speed run selects decks, keeps moving and
   if (width > 500) await page.keyboard.press(left ? 'ArrowLeft' : 'ArrowRight');
   else await buttons.nth(left ? 0 : 1).click({ force: true });
   await expect(page.locator('.run-heading [role=status]')).toContainText('Correct 1');
-  await expect(page.locator('.run-ghost-stage .run-correct')).toHaveCount(1);
+  await expect(page.locator('.run-feedback-history .run-correct')).toHaveCount(1);
   await expect.poll(async () => Number(await page.locator('.run-scene').getAttribute('data-position'))).toBeGreaterThan(start);
   await page.screenshot({ path: test.info().outputPath(`run-feedback-${width}.png`) });
   await page.getByRole('button', { name: '← Decks' }).click();
@@ -108,6 +110,8 @@ test('speed run reads prompts first and answers only after a choice', async ({ p
   await page.getByRole('button', { name: 'Select all', exact: true }).click();
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   await expect(page.locator('.run-stage .run-prompt button')).toBeVisible();
+  await page.getByRole('slider', { name: 'Speed', exact: true }).fill('0.1');
+  await page.getByRole('slider', { name: 'Speed', exact: true }).blur();
   const prompt = await page.locator('.run-stage .run-prompt').innerText();
   const spoken = () => page.evaluate(() => (window as unknown as { spoken: string[] }).spoken);
   await expect.poll(spoken).toEqual([prompt]);
@@ -118,7 +122,7 @@ test('speed run reads prompts first and answers only after a choice', async ({ p
   await expect.poll(async () => (await spoken()).slice(0, 2)).toEqual([prompt, correct]);
 });
 
-test('3D trios stay fixed in the aisle and ghosts follow the camera', async ({ page }) => {
+test('portrait trios stay fixed and passed answers remain in the aisle', async ({ page }) => {
   await page.clock.install();
   await deck(page);
   await page.goto('/speed-run');
@@ -126,22 +130,30 @@ test('3D trios stay fixed in the aisle and ghosts follow the camera', async ({ p
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   const scene = page.locator('.run-scene');
   await expect(scene).toHaveAttribute('data-stones', /position/);
+  await page.getByRole('slider', { name: 'Speed', exact: true }).fill('0.1');
+  await page.getByRole('slider', { name: 'Speed', exact: true }).blur();
   await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 1000));
   const read = async () => ({ camera: Number(await scene.getAttribute('data-camera-z')), stones: JSON.parse((await scene.getAttribute('data-stones'))!) as { id: number; position: number[] }[] });
   const before = await read();
   expect(before.stones).toHaveLength(3);
+  expect(before.stones.map(stone => stone.position[0])).toEqual([0, 0, 0]);
+  expect(before.stones[1].position[1]).toBeGreaterThan(before.stones[0].position[1]);
+  expect(before.stones[2].position[1]).toBeLessThan(before.stones[0].position[1]);
   await page.clock.runFor(400);
   const after = await read();
   expect(after.camera).toBeLessThan(before.camera);
   expect(after.stones).toEqual(before.stones);
   await page.keyboard.press('a');
   await page.clock.runFor(400);
-  const ghostStart = await read();
+  const answeredStart = await read();
   await page.clock.runFor(400);
-  const ghostEnd = await read();
-  const oldStone = (state: typeof ghostStart) => state.stones.find(stone => stone.id === before.stones[1].id)!;
-  expect(oldStone(ghostEnd).position[2] - ghostEnd.camera).toBeCloseTo(oldStone(ghostStart).position[2] - ghostStart.camera, 5);
-  expect(oldStone(ghostEnd).position[1]).toBe(oldStone(ghostStart).position[1]);
+  const answeredEnd = await read();
+  const oldStone = (state: typeof answeredStart) => state.stones.find(stone => stone.id === before.stones[1].id)!;
+  expect(oldStone(answeredEnd).position).toEqual(oldStone(answeredStart).position);
+  expect(answeredEnd.camera).toBeLessThan(answeredStart.camera);
+  const prompt = answeredEnd.stones.find(stone => stone.id === before.stones[0].id)!;
+  expect(oldStone(answeredEnd).position[1] - prompt.position[1] - 1.65).toBeCloseTo(.25, 5);
+  expect(oldStone(answeredEnd).position[1]).toBe(oldStone(answeredStart).position[1]);
   await page.clock.runFor(1400);
-  expect(oldStone(await read()).position[1]).toBeLessThan(oldStone(ghostStart).position[1]);
+  expect(oldStone(await read()).position).toEqual(oldStone(answeredStart).position);
 });

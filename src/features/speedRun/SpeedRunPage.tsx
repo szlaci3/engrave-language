@@ -8,21 +8,21 @@ import { getVoicePreferences } from '../settings/voicePreferences';
 import { getChineseAudioTextParts, stopCurrentAudio } from '../files/audioService';
 import { speakChinese, speakDutch } from '../files/speech';
 import { WALK_SPEED } from '../world/navigation';
-import { GHOST_SECONDS, SPEED_RUN_TRIO_SPACING, makeQuestion, shuffled, type Direction, type Outcome, type Question } from './model';
+import { ANSWER_AUDIO_DELAY_SECONDS, SPEED_RUN_ANSWER_OFFSET, SPEED_RUN_PROMPT_MOVE, SPEED_RUN_TRIO_SPACING, makeQuestion, shuffled, type Direction, type Outcome, type Question } from './model';
 import { recordResult } from './progress';
 import './speedRun.css';
 
 function audio(text: string, language: 'nl' | 'zh') {
   if (language === 'nl') speakDutch(text); else speakChinese(getChineseAudioTextParts(text)[0]);
 }
-function Stone({ text, className = '', onClick, label }: { text: string; className?: string; onClick?: () => void; label?: string }) {
+function Stone({ text, className = '', onClick, label }: { text: string; className?: string; onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void; label?: string }) {
   return <button className={`run-stone ${className}`} onClick={onClick} disabled={!onClick} aria-label={label ?? text}><span>{text}</span></button>;
 }
 type Trio = { question: Question; chosen: 0 | 1 | null; outcome?: Outcome };
-function TrioView({ trio, choose, ghost = false }: { trio: Trio; choose?: (side: 0 | 1) => void; ghost?: boolean }) {
-  return <div className={`run-trio ${ghost ? 'run-ghost' : ''}`} data-chosen={trio.chosen ?? ''}>
+function TrioView({ trio, choose, feedback = false }: { trio: Trio; choose?: (side: 0 | 1, event: React.MouseEvent<HTMLButtonElement>) => void; feedback?: boolean }) {
+  return <div className={`run-trio ${feedback ? 'run-feedback-trio' : ''}`} data-chosen={trio.chosen ?? ''}>
     <div className="run-prompt"><Stone text={trio.question.prompt} /></div>
-    <div className="run-answers">{trio.question.answers.map((answer, side) => <Stone key={side} text={answer} label={`${side === 0 ? 'Left' : 'Right'}: ${answer}`} onClick={choose ? () => choose(side as 0 | 1) : undefined}
+    <div className="run-answers">{trio.question.answers.map((answer, side) => <Stone key={side} text={answer} label={`${side === 0 ? 'Upper answer' : 'Lower answer'}: ${answer}`} onClick={choose ? event => choose(side as 0 | 1, event) : undefined}
       className={trio.outcome ? side === trio.question.correctSide ? 'run-correct' : side === trio.chosen ? 'run-wrong' : '' : ''} />)}</div>
     {trio.outcome && <p className="run-feedback">{trio.outcome === 'correct' ? 'Correct' : trio.outcome === 'mistake' ? 'Incorrect — correct answer highlighted' : 'Unanswered — correct answer highlighted'}</p>}
   </div>;
@@ -32,17 +32,17 @@ function Run({ entries, direction, exit }: { entries: VocabularyEntry[]; directi
   useEffect(() => { source.current = entries; }, [entries]);
   const host = useRef<HTMLDivElement>(null);
   const approaching = useRef<HTMLDivElement>(null);
-  const ghosts = useRef<HTMLDivElement>(null);
-  const choose = useRef<(side: 0 | 1) => void>(() => {});
+  const history = useRef<HTMLDivElement>(null);
+  const choose = useRef<(side: 0 | 1, x?: number, y?: number) => void>(() => {});
   const speedRef = useRef(1);
   const [speed, setSpeed] = useState(1);
   useEffect(() => {
     let active = true;
-    db.settings.get('speed-run-speed').then(saved => { const value = Number(saved?.value); if (active && value >= .25 && value <= 3) { speedRef.current = value; setSpeed(value); } }).catch(() => {});
+    db.settings.get('speed-run-speed').then(saved => { const value = Number(saved?.value); if (active && value >= .1 && value <= 3) { const normalized = Math.round(value * 10) / 10; speedRef.current = normalized; setSpeed(normalized); } }).catch(() => {});
     return () => { active = false; };
   }, []);
   const [trio, setTrio] = useState<Trio | null>(null);
-  const [ghostList, setGhostList] = useState<(Trio & { id: number; born: number; station: number })[]>([]);
+  const [feedbackList, setFeedbackList] = useState<(Trio & { id: number; born: number; station: number })[]>([]);
   const [counts, setCounts] = useState({ correct: 0, mistake: 0, unanswered: 0 });
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -73,17 +73,20 @@ function Run({ entries, direction, exit }: { entries: VocabularyEntry[]; directi
       const outcome: Outcome = side === null ? 'unanswered' : side === current.correctSide ? 'correct' : 'mistake';
       setCounts(value => ({ ...value, [outcome]: value[outcome] + 1 }));
       void recordResult(current.entry.id, direction, outcome).catch(() => { if (active) setError('Could not save progress. Please check device storage.'); });
-      const snapshot = { id: serial++, question: current, chosen: side, outcome, born: elapsed, station: nextAt - distance };
+      const snapshot = { id: serial++, question: current, chosen: side, outcome, born: elapsed, station: nextAt };
       feedback.push(snapshot);
-      setGhostList([...feedback]);
+      setFeedbackList([...feedback]);
       setTrio(null);
       stopCurrentAudio();
       const mode = getVoicePreferences().audioAutoplay;
-      if (mode === 'back' || mode === 'both') { audio(current.answers[current.correctSide], direction === 'zh-nl' ? 'nl' : 'zh'); answerUntil = elapsed + GHOST_SECONDS; }
+      if (mode === 'back' || mode === 'both') { audio(current.answers[current.correctSide], direction === 'zh-nl' ? 'nl' : 'zh'); answerUntil = elapsed + ANSWER_AUDIO_DELAY_SECONDS; }
       nextAt += SPEED_RUN_TRIO_SPACING;
       next();
     };
-    choose.current = side => answer(side);
+    choose.current = (side, x, y) => {
+      if (x !== undefined && y !== undefined && world?.pickRunStone(x, y) !== serial * 3 + side + 1) return;
+      answer(side);
+    };
     const keyboard = (event: KeyboardEvent) => {
       if (event.repeat || event.ctrlKey || event.altKey || event.metaKey || (event.target instanceof HTMLElement && event.target.closest('input,select,textarea,[contenteditable]'))) return;
       const key = event.key.toLowerCase();
@@ -95,14 +98,12 @@ function Run({ entries, direction, exit }: { entries: VocabularyEntry[]; directi
       elapsed += delta; distance += delta * WALK_SPEED * speedRef.current;
       const stones: RunStone[] = [];
       const addTrio = (question: Question, id: number, station: number, age = -1, chosen: 0 | 1 | null = null) => {
-        const drop = age < 0 ? 0 : Math.max(0, age - GHOST_SECONDS) ** 2 * 28;
-        const opacity = age < 0 ? 1 : .5;
-        const x = chosen === null ? 0 : (chosen === 0 ? -2.85 : 2.85) * Math.min(1, age / .3);
-        stones.push({ id, title: question.prompt, language: direction === 'zh-nl' ? 'zh' : 'nl', x, y: 4 - drop, station, opacity });
-        question.answers.forEach((title, side) => stones.push({ id: id + side + 1, title, language: direction === 'zh-nl' ? 'nl' : 'zh', x: side === 0 ? -2.85 : 2.85, y: 1.675 - drop, station, opacity, tint: age < 0 ? undefined : side === question.correctSide ? '#82d793' : side === chosen ? '#ed8b80' : undefined }));
+        const movement = chosen === null ? 0 : (chosen === 0 ? 1 : -1) * SPEED_RUN_PROMPT_MOVE * Math.min(1, age / .3);
+        stones.push({ id, title: question.prompt, language: direction === 'zh-nl' ? 'zh' : 'nl', x: 0, y: 4 + movement, station, opacity: 1 });
+        question.answers.forEach((title, side) => stones.push({ id: id + side + 1, title, language: direction === 'zh-nl' ? 'nl' : 'zh', x: 0, y: 4 + (side === 0 ? SPEED_RUN_ANSWER_OFFSET : -SPEED_RUN_ANSWER_OFFSET), station, opacity: 1, tint: age < 0 ? undefined : side === question.correctSide ? '#82d793' : side === chosen ? '#ed8b80' : undefined }));
       };
       if (current) addTrio(current, serial * 3, nextAt);
-      for (const item of feedback) addTrio(item.question, item.id * 3, distance + item.station, elapsed - item.born, item.chosen);
+      for (const item of feedback) addTrio(item.question, item.id * 3, item.station, elapsed - item.born, item.chosen);
       const rectangles = world?.tour(distance, stones) ?? [];
       const buttons = approaching.current?.querySelectorAll<HTMLButtonElement>('button');
       rectangles.filter(rect => rect.id >= serial * 3).forEach((rect, i) => {
@@ -116,9 +117,9 @@ function Run({ entries, direction, exit }: { entries: VocabularyEntry[]; directi
         const mode = getVoicePreferences().audioAutoplay;
         if (mode === 'front' || mode === 'both') audio(current.prompt, direction === 'zh-nl' ? 'zh' : 'nl');
       }
-      if (feedback.some(item => elapsed - item.born > GHOST_SECONDS + .8)) {
-        feedback = feedback.filter(item => elapsed - item.born <= GHOST_SECONDS + .8);
-        setGhostList([...feedback]);
+      if (feedback.some(item => distance > item.station + 20)) {
+        feedback = feedback.filter(item => distance <= item.station + 20);
+        setFeedbackList([...feedback]);
       }
       if (noticeUntil && elapsed > noticeUntil) { setNotice(''); noticeUntil = 0; }
       if (distance >= nextAt && !answered) answer(null);
@@ -136,9 +137,9 @@ function Run({ entries, direction, exit }: { entries: VocabularyEntry[]; directi
   return <main className="speed-world">
     <div className="run-scene" ref={host} />
     <header className="run-heading"><button onClick={exit}>← Decks</button><h1>Speed Run</h1><p role="status">Correct {counts.correct} · Mistakes {counts.mistake} · Unanswered {counts.unanswered}</p><p className="run-endline">{notice}</p>{error && <p role="alert">{error}</p>}</header>
-    <div className={`run-stage${ghostList.length ? ' run-stage-with-feedback' : ''}`} ref={approaching}>{trio && <TrioView trio={trio} choose={side => choose.current(side)} />}</div>
-    <div ref={ghosts}>{ghostList.map(item => <div className="run-ghost-stage" key={item.id} data-born={item.born} ><TrioView trio={item} ghost /></div>)}</div>
-    <footer className="run-toolbar"><label>Speed {speed.toFixed(2)}× <input aria-label="Speed" type="range" min="0.25" max="3" step="0.25" value={speed} onChange={event => { const value = Number(event.target.value); setSpeed(value); speedRef.current = value; void db.settings.put({ key: 'speed-run-speed', value: String(value), updatedAt: new Date().toISOString() }).catch(() => setError('Could not save speed.')); }} /></label><span>A / ← Left · D / → Right</span></footer>
+    <div className={`run-stage${feedbackList.length ? ' run-stage-with-feedback' : ''}`} ref={approaching}>{trio && <TrioView trio={trio} choose={(side, event) => choose.current(side, event.detail === 0 ? undefined : event.clientX, event.detail === 0 ? undefined : event.clientY)} />}</div>
+    <div ref={history}>{feedbackList.map(item => <div className="run-feedback-history" key={item.id} data-born={item.born} ><TrioView trio={item} feedback /></div>)}</div>
+    <footer className="run-toolbar"><label>Speed {speed.toFixed(2)}× <input aria-label="Speed" type="range" min="0.1" max="3" step="0.1" value={speed} onChange={event => { const value = Number(event.target.value); setSpeed(value); speedRef.current = value; void db.settings.put({ key: 'speed-run-speed', value: String(value), updatedAt: new Date().toISOString() }).catch(() => setError('Could not save speed.')); }} /></label><span>A / ← Upper · D / → Lower</span></footer>
   </main>;
 }
 export function SpeedRunPage() {
