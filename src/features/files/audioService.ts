@@ -1,3 +1,4 @@
+import { getUiLanguage } from '../settings/uiLanguage';
 import { getVoicePreferences } from '../settings/voicePreferences';
 import {
   selectLanguageVoice,
@@ -16,7 +17,8 @@ const persistentLookupCacheKey = 'wooord.wiktionaryAudioLookupCache.v2';
 const audioResponseCacheName = 'wooord-wiktionary-audio-v2';
 const maxPersistentLookupEntries = 1000;
 
-const fallbackLanguageByVoiceLanguage: Record<VoiceLanguage, string> = {
+const fallbackLanguageByVoiceLanguage: Record<VoiceLanguage | 'english', string> = {
+  english: 'en-US',
   chinese: 'zh-CN',
   dutch: 'nl-BE',
 };
@@ -45,7 +47,7 @@ export function stopCurrentAudio() {
 
 function speakWithSpeechSynthesis(
   text: string,
-  language: VoiceLanguage,
+  language: VoiceLanguage | 'english',
   options: PlayAudioOptions = {},
 ) {
   if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
@@ -57,7 +59,10 @@ function speakWithSpeechSynthesis(
     language === 'dutch'
       ? preferences.dutchVoiceURI
       : preferences.chineseVoiceURI;
-  const voice = selectLanguageVoice(
+  const voice = language === 'english'
+    ? window.speechSynthesis.getVoices().filter(voice => /^en(?:-|$)/iu.test(voice.lang))
+      .sort((a, b) => Number(b.default) - Number(a.default))[0] ?? null
+    : selectLanguageVoice(
     window.speechSynthesis.getVoices(),
     language,
     preferredVoiceURI,
@@ -509,7 +514,7 @@ function playWiktionaryOrFallback(
   return true;
 }
 
-export function playLanguageAudio(
+function playConfiguredLanguageAudio(
   text: string,
   language: VoiceLanguage,
   options: PlayAudioOptions = {},
@@ -525,4 +530,19 @@ export function playLanguageAudio(
   }
 
   return speakWithSpeechSynthesis(text, language, options);
+}
+
+// The stored Chinese side also holds English imports. Resolve the persisted UI
+// language at playback time so reloads and settings/database imports are honored.
+export function playLanguageAudio(text: string, language: VoiceLanguage, options: PlayAudioOptions = {}) {
+  if (language === 'dutch') return playConfiguredLanguageAudio(text, language, options);
+  const sequence = playbackSequence;
+  void getUiLanguage().catch(() => 'zh').then(uiLanguage => {
+    if (sequence !== playbackSequence) return;
+    const started = uiLanguage === 'en'
+      ? speakWithSpeechSynthesis(text, 'english', options)
+      : playConfiguredLanguageAudio(text, language, options);
+    if (!started) options.onEnd?.();
+  });
+  return true;
 }
