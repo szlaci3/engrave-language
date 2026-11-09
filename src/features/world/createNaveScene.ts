@@ -11,7 +11,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.setClearColor('#dceaf4');
-  renderer.domElement.setAttribute('aria-label', sceneryOnly ? 'Continuously moving water aisle.' : 'One row of Chinese and Dutch stone flashcards. Hold W or Up to walk forward, S or Down to walk backward. Press D for next, A for previous.');
+  renderer.domElement.setAttribute('aria-label', sceneryOnly ? 'Continuously moving limestone gallery.' : 'One row of Chinese and Dutch stone flashcards. Hold W or Up to walk forward, S or Down to walk backward. Press D for next, A for previous.');
   renderer.domElement.setAttribute('role', 'img');
   host.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
@@ -36,7 +36,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
     texture.repeat.set(1 / wallpaperScale, wallHeight / wallpaperHeight);
     texture.offset.set((1 - texture.repeat.x) / 2, 1 - texture.repeat.y);
   }
-  const parquet = createParquetFloor();
+  const parquet = createParquetFloor(sceneryOnly);
   const floor = parquet.mesh;
   scene.add(floor);
   const nave = new THREE.Group(); scene.add(nave);
@@ -60,6 +60,35 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
     panels.setMatrixAt(i, matrix);
   }
   nave.add(panels);
+  if (sceneryOnly) {
+    // Speed Run has its own modern gallery; review retains the vaulted water aisle.
+    const limestone = keep(new THREE.MeshLambertMaterial({ color: '#ded3b8' }));
+    const patina = keep(new THREE.MeshLambertMaterial({ color: '#366b70' }));
+    const brass = keep(new THREE.MeshBasicMaterial({ color: '#b99d66' }));
+    const ceiling = keep(new THREE.MeshBasicMaterial({ color: '#eee5d1', side: THREE.DoubleSide }));
+    repeated(new THREE.BoxGeometry(.7, 12, .7), patina, pillars.map(([x,,z]) => [x,6,z]));
+    repeated(new THREE.BoxGeometry(1.15, .25, 1.15), limestone, pillars.map(([x,,z]) => [x,.125,z]));
+    repeated(new THREE.BoxGeometry(1.1, .3, 1.1), brass, pillars.map(([x,,z]) => [x,11.4,z]));
+    const stations: [number, number, number][] = Array.from({ length: segments }, (_, i) => [0,12,-i*10-5]);
+    repeated(new THREE.BoxGeometry(21, .3, 10), ceiling, stations);
+    repeated(new THREE.BoxGeometry(21, .45, .45), limestone, stations.map(([x,y,z]) => [x,y-.35,z+5]));
+    for (const side of [-1,1]) {
+      repeated(new THREE.BoxGeometry(.2, .15, 10), brass, stations.map(([,y,z]) => [side*6,y-.25,z]));
+      repeated(new THREE.BoxGeometry(.15, .16, 10), brass, stations.map(([, ,z]) => [side*9.8,.12,z]));
+    }
+    const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#d8ccb1'; ctx.fillRect(0,0,512,512);
+    ctx.strokeStyle = '#c3b596'; ctx.lineWidth = 3;
+    for (const y of [0,128,256,384,512]) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(512,y); ctx.stroke(); }
+    for (let row=0;row<4;row++) for (let col=0;col<3;col++) {
+      const x=col*256-(row%2)*128; ctx.beginPath(); ctx.moveTo(x,row*128); ctx.lineTo(x,(row+1)*128); ctx.stroke();
+    }
+    ctx.strokeStyle = '#ac9363'; ctx.lineWidth = 6; ctx.strokeRect(22,32,468,448);
+    ctx.fillStyle = '#366b70'; ctx.fillRect(48,72,416,12); ctx.fillRect(48,428,416,12);
+    const texture = keep(new THREE.CanvasTexture(canvas)); texture.colorSpace = THREE.SRGBColorSpace;
+    wall.map = texture; wall.color.set('#ffffff');
+  } else {
   repeated(new THREE.CylinderGeometry(.55, .65, 11, 12), stone, pillars);
   for (const offset of [-.48, .48]) {
     repeated(new THREE.CylinderGeometry(.18, .23, 11, 8), trim, pillars.map(([x,y,z]) => [x + offset,y,z + .35]));
@@ -90,6 +119,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   for (const side of [-1,1]) for (const end of [0,-10]) {
     const rib = new THREE.QuadraticBezierCurve3(new THREE.Vector3(side*10,11,end),new THREE.Vector3(side*8,17,-5),new THREE.Vector3(0,20,-5));
     repeated(new THREE.TubeGeometry(rib,24,.12,6,false),archTrim,stations);
+  }
   }
   const blueStone = keep(new THREE.MeshLambertMaterial({ color: '#424f58' }));
   const whiteStone = keep(new THREE.MeshLambertMaterial({ color: '#a9a394' }));
@@ -406,6 +436,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
     renderer.setSize(host.clientWidth, host.clientHeight);
     parquet.resize(Math.min(960, host.clientWidth * renderer.getPixelRatio()), Math.min(960, host.clientHeight * renderer.getPixelRatio())); invalidate();
   });
+  if (!sceneryOnly) {
   // One shared image texture for every repeated wall bay.
   const wallpaper = keep(new THREE.TextureLoader().load('/textures/nave-wall-water.jpg', texture => {
     if (disposed) { texture.dispose(); return; }
@@ -417,6 +448,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   wallpaper.colorSpace = THREE.SRGBColorSpace;
   fitWallpaper(wallpaper);
   wallpaper.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+  }
   observer.observe(host); invalidate();
   const runRaycaster = new THREE.Raycaster();
   return {

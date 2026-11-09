@@ -6,7 +6,7 @@
 .run-deck[aria-pressed=true] { border-color:#216b9b; background:#c6e5f7; box-shadow:inset 5px 0 #216b9b; }
 .speed-world { position:fixed; inset:0; overflow:hidden; background:#dceaf4; color:#173f57; }
 .run-scene { position:absolute; inset:0; }
-.run-heading { position:absolute; top:max(12px,env(safe-area-inset-top)); left:4%; right:4%; z-index:5; pointer-events:none; }
+.run-heading { position:absolute; top:max(12px,env(safe-area-inset-top)); left:4%; right:4%; z-index:5; pointer-events:none; background:#f3eddfed; border-radius:12px; padding:10px 14px; }
 .run-heading button { pointer-events:auto; border:0; border-radius:8px; padding:8px 12px; background:#edf7f8df; color:#173f57; cursor:pointer; }
 .run-heading h1 { font-size:22px; margin:8px 0; }
 .run-heading p { margin:5px 0; font-size:14px; }

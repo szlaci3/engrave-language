@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 
 /** One full-render-resolution scene reflection (manual quality trial), shared by all books and architecture. */
-export function createParquetFloor() {
+export function createParquetFloor(gallery = false) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 512;
   const ctx = canvas.getContext('2d')!;
@@ -28,6 +28,17 @@ export function createParquetFloor() {
       ctx.strokeRect(-64, y, 128, 32);
     }
     ctx.restore();
+  }
+  if (gallery) {
+    // Large honed limestone tiles, rather than the review aisle's blue parquet.
+    ctx.fillStyle = '#d6cdb6'; ctx.fillRect(0,0,512,512);
+    ctx.strokeStyle = '#b5aa90'; ctx.lineWidth = 3;
+    ctx.strokeRect(0,0,512,512);
+    ctx.strokeRect(12,12,488,488);
+    ctx.fillStyle = '#63817d';
+    for (const [x,y] of [[0,0],[512,0],[0,512],[512,512]]) {
+      ctx.beginPath(); ctx.moveTo(x-30,y); ctx.lineTo(x,y-30); ctx.lineTo(x+30,y); ctx.lineTo(x,y+30); ctx.fill();
+    }
   }
   const wood = new THREE.CanvasTexture(canvas);
   wood.colorSpace = THREE.SRGBColorSpace;

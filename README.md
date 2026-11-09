@@ -81,3 +81,5 @@ the landing page deck order and uses cards with both sides filled.
 Audio clips no longer interrupt one another. Recordings can overlap; browser speech queues utterances because the Web Speech API uses a single speech channel. Autoplay keeps the selected front/back/both behavior in 2D, 3D and Speed Run. Advancing or choosing an answer does not cancel previous clips or pending lookups, and Speed Run has no artificial answer-audio delay. Leaving a practice view stops its audio.
 
 When UI language is English, audio for the Chinese-side stones (including English JSON imports) uses an available English browser voice, with `en-US` as the fallback language. This applies to manual playback and autoplay in both review modes and Speed Run. Dutch audio retains its existing source and voice preferences.
+
+Speed Run uses a separate limestone gallery: flat coffered ceiling, framed stone-block walls, teal square columns with brass trim, and pale reflective tile flooring. The vaulted water aisle remains exclusive to 3D review. Both worlds share the same stone geometry and navigation.
