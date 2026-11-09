@@ -51,7 +51,9 @@ material, the run displays “Endline - Starting again” and shuffles another l
 `SPEED_RUN_TRIO_SPACING = 9` world units and
 the portrait layout constants are in `src/features/speedRun/model.ts`. Answers are
 above and below the prompt. Answered trios remain opaque at fixed world positions
-as the camera passes; ghost holding and dropping are disabled. Progress is saved by stable
+as the camera approaches; ghost holding is disabled. Dropping starts at
+`nearDistance × SPEED_RUN_DROP_DISTANCE_MULTIPLIER` (0.7).
+`SPEED_RUN_VISIBLE_TRIOS = 2` renders the current and upcoming trios together. Progress is saved by stable
 card ID and language direction in Dexie and included in version 3 backups. Older
 backups remain importable. Deck editing now changes only the title; edit vocabulary
 pairs in 3D review to retain their IDs and history.

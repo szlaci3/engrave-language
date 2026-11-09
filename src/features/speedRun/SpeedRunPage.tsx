@@ -8,7 +8,7 @@ import { getVoicePreferences } from '../settings/voicePreferences';
 import { getChineseAudioTextParts, stopCurrentAudio } from '../files/audioService';
 import { speakChinese, speakDutch } from '../files/speech';
 import { WALK_SPEED } from '../world/navigation';
-import { ANSWER_AUDIO_DELAY_SECONDS, SPEED_RUN_ANSWER_OFFSET, SPEED_RUN_PROMPT_MOVE, SPEED_RUN_TRIO_SPACING, makeQuestion, shuffled, type Direction, type Outcome, type Question } from './model';
+import { SPEED_RUN_VISIBLE_TRIOS, ANSWER_AUDIO_DELAY_SECONDS, SPEED_RUN_ANSWER_OFFSET, SPEED_RUN_PROMPT_MOVE, SPEED_RUN_TRIO_SPACING, makeQuestion, shuffled, type Direction, type Outcome, type Question } from './model';
 import { recordResult } from './progress';
 import './speedRun.css';
 
@@ -51,18 +51,27 @@ function Run({ entries, direction, exit }: { entries: VocabularyEntry[]; directi
     let pool: VocabularyEntry[] = [], cursor = 0, current: Question | null = null, answered = false, noticeUntil = 0, promptAt = 0, answerUntil = 0, serial = 0;
     let feedback: (Trio & { id: number; born: number; station: number })[] = [];
     let world: Awaited<ReturnType<typeof import('../world/createNaveScene')['createNaveScene']>> | undefined;
-    const next = () => {
+    let upcoming: { question: Question; startsLap: boolean } | null = null;
+    const takeQuestion = () => {
+      let startsLap = false;
       if (cursor >= pool.length) {
-        if (pool.length) { setNotice('Endline - Starting again'); noticeUntil = elapsed + 3; }
+        startsLap = pool.length > 0;
         pool = shuffled(source.current); cursor = 0;
       }
-      current = null;
-      while (cursor < pool.length && !current) {
+      while (cursor < pool.length) {
         const queued = pool[cursor++];
         const latest = source.current.find(entry => entry.id === queued.id);
-        if (latest) current = makeQuestion(latest, source.current, direction);
+        const question = latest ? makeQuestion(latest, source.current, direction) : null;
+        if (question) return { question, startsLap };
       }
+      return null;
+    };
+    const next = () => {
+      const item = upcoming ?? takeQuestion();
+      current = item?.question ?? null;
       if (!current) { setError('Choose decks with at least two different prompts and answers.'); return; }
+      if (item?.startsLap) { setNotice('Endline - Starting again'); noticeUntil = elapsed + 3; }
+      upcoming = takeQuestion();
       answered = false;
       setTrio({ question: current, chosen: null });
       promptAt = Math.max(elapsed, answerUntil);
@@ -103,10 +112,11 @@ function Run({ entries, direction, exit }: { entries: VocabularyEntry[]; directi
         question.answers.forEach((title, side) => stones.push({ id: id + side + 1, title, language: direction === 'zh-nl' ? 'nl' : 'zh', x: 0, y: 4 + (side === 0 ? SPEED_RUN_ANSWER_OFFSET : -SPEED_RUN_ANSWER_OFFSET), station, opacity: 1, tint: age < 0 ? undefined : side === question.correctSide ? '#82d793' : side === chosen ? '#ed8b80' : undefined }));
       };
       if (current) addTrio(current, serial * 3, nextAt);
+      if (SPEED_RUN_VISIBLE_TRIOS > 1 && upcoming) addTrio(upcoming.question, (serial + 1) * 3, nextAt + SPEED_RUN_TRIO_SPACING);
       for (const item of feedback) addTrio(item.question, item.id * 3, item.station, elapsed - item.born, item.chosen);
-      const rectangles = world?.tour(distance, stones) ?? [];
+      const rectangles = world?.tour(distance, stones, elapsed) ?? [];
       const buttons = approaching.current?.querySelectorAll<HTMLButtonElement>('button');
-      rectangles.filter(rect => rect.id >= serial * 3).forEach((rect, i) => {
+      rectangles.filter(rect => rect.id >= serial * 3 && rect.id < (serial + 1) * 3).forEach((rect, i) => {
         const button = buttons?.[i];
         if (button) Object.assign(button.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` });
       });

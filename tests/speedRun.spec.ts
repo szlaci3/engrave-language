@@ -122,7 +122,7 @@ test('speed run reads prompts first and answers only after a choice', async ({ p
   await expect.poll(async () => (await spoken()).slice(0, 2)).toEqual([prompt, correct]);
 });
 
-test('portrait trios stay fixed and passed answers remain in the aisle', async ({ page }) => {
+test('portrait previews stay fixed and trios drop at the configured near distance', async ({ page }) => {
   await page.clock.install();
   await deck(page);
   await page.goto('/speed-run');
@@ -135,8 +135,8 @@ test('portrait trios stay fixed and passed answers remain in the aisle', async (
   await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now()) + 1000));
   const read = async () => ({ camera: Number(await scene.getAttribute('data-camera-z')), stones: JSON.parse((await scene.getAttribute('data-stones'))!) as { id: number; position: number[] }[] });
   const before = await read();
-  expect(before.stones).toHaveLength(3);
-  expect(before.stones.map(stone => stone.position[0])).toEqual([0, 0, 0]);
+  expect(before.stones).toHaveLength(6);
+  expect(before.stones.slice(0, 3).map(stone => stone.position[0])).toEqual([0, 0, 0]);
   expect(before.stones[1].position[1]).toBeGreaterThan(before.stones[0].position[1]);
   expect(before.stones[2].position[1]).toBeLessThan(before.stones[0].position[1]);
   await page.clock.runFor(400);
@@ -156,4 +156,15 @@ test('portrait trios stay fixed and passed answers remain in the aisle', async (
   expect(oldStone(answeredEnd).position[1]).toBe(oldStone(answeredStart).position[1]);
   await page.clock.runFor(1400);
   expect(oldStone(await read()).position).toEqual(oldStone(answeredStart).position);
+  // The already-rendered preview becomes the next question without relocation.
+  expect(answeredStart.stones.find(stone => stone.id === before.stones[3].id)?.position).toEqual(before.stones[3].position);
+  await page.getByRole('slider', { name: 'Speed', exact: true }).fill('3');
+  const state = await read();
+  const near = Number(await scene.getAttribute('data-near-distance'));
+  const distanceUntilDrop = -oldStone(state).position[2] + state.camera - near * .7;
+  await page.clock.runFor(Math.max(0, Math.floor(distanceUntilDrop / 15 * 1000) - 50));
+  expect(oldStone(await read()).position[1]).toBe(oldStone(answeredStart).position[1]);
+  await page.clock.runFor(300);
+  expect(oldStone(await read()).position[1]).toBeLessThan(oldStone(answeredStart).position[1]);
+
 });

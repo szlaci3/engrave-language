@@ -1,4 +1,4 @@
-import { SPEED_RUN_NEAR_DISTANCE_MULTIPLIER } from '../speedRun/model';
+import { SPEED_RUN_DROP_DISTANCE_MULTIPLIER, SPEED_RUN_NEAR_DISTANCE_MULTIPLIER } from '../speedRun/model';
 import { createParquetFloor } from './parquetFloor';
 import * as THREE from 'three';
 import type { Flashcard } from './flashcards';
@@ -100,6 +100,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
   const frontGeometry = keep(new THREE.PlaneGeometry(5.3, stoneHeight));
   const bookMeshes = new Map<number, THREE.Group>();
   const bookDrops = new Map<number, number>();
+  const runDropStarts = new Map<number, number>();
   const runMaterials = new Map<number, THREE.Material[]>();
   const reflectedStones = new THREE.Scene();
   reflectedStones.fog = scene.fog;
@@ -269,7 +270,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
       if (material instanceof THREE.MeshBasicMaterial) material.map?.dispose();
       material.dispose();
     }
-    runMaterials.delete(id);
+    runMaterials.delete(id); runDropStarts.delete(id);
     reflectedStones.remove(reflectionMeshes.get(id)!); reflectionMeshes.delete(id);
     bookMeshes.delete(id); bookDrops.delete(id);
   }
@@ -411,7 +412,7 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
       const hit = runRaycaster.intersectObjects([...bookMeshes.values()], true)[0];
       return hit?.object.parent?.userData.runId as number | undefined;
     },
-    tour(distance: number, stones: RunStone[] = []) {
+    tour(distance: number, stones: RunStone[] = [], time = performance.now() / 1000) {
       const ids = new Set(stones.map(stone => stone.id));
       for (const [id, group] of bookMeshes) if (!ids.has(id)) removeBook(id, group);
       for (const stone of stones) {
@@ -427,13 +428,18 @@ export function createNaveScene(host: HTMLElement, onCurrent: (index: number) =>
           bookMeshes.set(stone.id, group); scene.add(group);
           const reflected = group.clone(); reflectionMeshes.set(stone.id, reflected); reflectedStones.add(reflected);
         }
-        group.position.set(stone.x, stone.y, -stone.station - nearDistance * SPEED_RUN_NEAR_DISTANCE_MULTIPLIER);
+        const z = -stone.station - nearDistance * SPEED_RUN_NEAR_DISTANCE_MULTIPLIER;
+        if (-z - distance <= nearDistance * SPEED_RUN_DROP_DISTANCE_MULTIPLIER && !runDropStarts.has(stone.id)) runDropStarts.set(stone.id, time);
+        const dropAge = Math.max(0, time - (runDropStarts.get(stone.id) ?? time));
+        group.position.set(stone.x, stone.y - dropAge ** 2 * 28, z);
+        group.visible = dropAge < 1;
         for (const material of runMaterials.get(stone.id)!) {
           material.transparent = stone.opacity < 1; material.opacity = stone.opacity; material.depthWrite = stone.opacity === 1;
           if (material instanceof THREE.MeshBasicMaterial) material.color.set(stone.tint ?? '#ffffff');
         }
       }
       position = distance; render(0);
+      host.dataset.nearDistance = String(nearDistance);
       host.dataset.cameraZ = String(camera.position.z);
       host.dataset.stones = JSON.stringify([...bookMeshes].map(([id, group]) => ({ id, position: group.position.toArray(), visible: group.visible })));
       return stones.map(stone => {
