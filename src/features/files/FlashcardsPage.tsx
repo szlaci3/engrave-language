@@ -3,7 +3,7 @@ import { useAudioAutoplay } from './useAudioAutoplay';
 import { usePracticeCompletion } from './usePracticeCompletion';
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { routes } from '../../app/routes';
-import { getVocabularyFile, updateVocabularyPair } from '../../db/vocabularyRepository';
+import { deleteVocabularyPair, getVocabularyFile, updateVocabularyPair } from '../../db/vocabularyRepository';
 import { useUiLanguage } from '../settings/uiLanguage';
 import { getLowControls, saveLowControls } from '../settings/worldSettings';
 import { getChineseAudioTextParts } from './audioService';
@@ -57,6 +57,9 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
       { id: entry.id + '-nl', title: entry.dutch, language: 'nl' as const }];
     return first === 'zh' ? pair : pair.reverse();
   }), [deck, first]);
+  const sceneWasReady = useRef(false);
+  const latestStones = useRef(stones);
+  useEffect(() => { latestStones.current = stones; }, [stones]);
   const entry = deck?.entries[Math.floor(index / 2)];
   useAudioAutoplay(`${fileId}:${index}:${first}`, index % 2 === 0 ? 'front' : 'back',
     !editing && (ready || fallback) ? stones[index]?.title ?? '' : '', stones[index]?.language ?? 'zh');
@@ -76,13 +79,14 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
     let active = true;
     import('../world/createNaveScene').then(({ createNaveScene }) => {
       if (!active || !host.current) return;
-      try { scene.current = createNaveScene(host.current, setIndex, () => setFallback(true), complete); setReady(true); }
+      try { scene.current = createNaveScene(host.current, setIndex, () => setFallback(true), complete); if (sceneWasReady.current) scene.current.update(latestStones.current, false); setReady(true); }
       catch { setFallback(true); }
     }).catch(() => { if (active) setFallback(true); });
     return () => { active = false; scene.current?.dispose(); scene.current = null; };
   }, [loading, deck?.entries.length, complete]);
   useEffect(() => {
     if (!ready) return;
+    sceneWasReady.current = true;
     const reset = previousFirst.current !== first;
     scene.current?.update(stones, reset);
     previousFirst.current = first;
@@ -139,6 +143,15 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
     try { await saveLowControls(next); }
     catch { setError(label('Could not save control height. Try again.', '无法保存控制栏高度，请重试。')); }
   }
+  async function deleteCard() {
+    if (!entry || saving || !window.confirm(label('Delete this card and its practice history?', '删除此卡片及其学习记录？'))) return;
+    setSaving(true);
+    try {
+      const updated = await deleteVocabularyPair(fileId, entry.id);
+      scene.current?.stop(); setIndex(0); setDeck(updated); setEditing(false);
+    } catch { setError(label('Could not delete card. Please try again.', '无法删除卡片，请重试。')); }
+    finally { setSaving(false); }
+  }
   async function savePair(event: React.FormEvent) {
     event.preventDefault();
     if (!entry || !dutch.trim() || !chinese.trim() || saving) return;
@@ -191,7 +204,7 @@ export function FlashcardsPage({ fileId }: { fileId: string }) {
         <label>{t('dutch')}<textarea autoFocus required value={dutch} onChange={e => setDutch(e.target.value)} /></label>
         <label>{t('chinese')}<textarea required value={chinese} onChange={e => setChinese(e.target.value)} /></label>
         {error && <p role="alert">{error}</p>}
-        <div><button type="button" disabled={saving} onClick={() => setEditing(false)}>{label('Cancel', '取消')}</button><button type="submit" disabled={saving || !dutch.trim() || !chinese.trim()}>{saving ? '…' : label('Save', '保存')}</button></div>
+        <div><button type="button" disabled={saving} onClick={() => void deleteCard()}>{label('Delete', '删除')}</button><button type="button" disabled={saving} onClick={() => setEditing(false)}>{label('Cancel', '取消')}</button><button type="submit" disabled={saving || !dutch.trim() || !chinese.trim()}>{saving ? '…' : label('Save', '保存')}</button></div>
       </form>
     </dialog>}
   </main>;

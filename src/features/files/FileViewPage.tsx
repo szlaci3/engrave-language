@@ -1,8 +1,11 @@
+import '../world/world.css';
 import { DeckStudyLinks } from './DeckStudyLinks';
 import { useEffect, useRef, useState } from 'react';
 import { routes } from '../../app/routes';
 import {
   getVocabularyFile,
+  addVocabularyPair,
+  deleteVocabularyPair,
   updateVocabularyFile,
 } from '../../db/vocabularyRepository';
 import { useUiLanguage } from '../settings/uiLanguage';
@@ -57,11 +60,47 @@ function SaveIcon() {
 }
 
 export function FileViewPage({ fileId }: FileViewPageProps) {
-  const { t } = useUiLanguage();
+  const { t, language } = useUiLanguage();
+  const label = (en: string, zh: string) => language === 'zh' ? zh : en;
   const [fileData, setFileData] = useState<VocabularyFileWithEntries | null>(
     null,
   );
   const [isLoading, setIsLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [newDutch, setNewDutch] = useState('');
+  const [newChinese, setNewChinese] = useState('');
+  const [cardError, setCardError] = useState('');
+  const [cardSaving, setCardSaving] = useState(false);
+  const addDialog = useRef<HTMLDialogElement>(null);
+  const addBusy = useRef(false);
+  useEffect(() => {
+    if (!adding) return;
+    const dialog = addDialog.current; dialog?.showModal();
+    return () => dialog?.close();
+  }, [adding]);
+  async function saveNewCard(close: boolean) {
+    if (addBusy.current) return;
+    if (!newDutch.trim() && !newChinese.trim()) {
+      if (close) setAdding(false);
+      else setCardError(label('Enter at least one side.', '请至少填写一面。'));
+      return;
+    }
+    addBusy.current = true; setCardSaving(true); setCardError('');
+    try {
+      setFileData(await addVocabularyPair(fileId, newDutch, newChinese));
+      setNewDutch(''); setNewChinese('');
+      if (close) setAdding(false); else addDialog.current?.querySelector('textarea')?.focus();
+    } catch { setCardError(label('Could not save card. Please try again.', '无法保存卡片，请重试。')); }
+    finally { addBusy.current = false; setCardSaving(false); }
+  }
+  async function deleteCard(entryId: string) {
+    if (addBusy.current || !window.confirm(label('Delete this card and its practice history?', '删除此卡片及其学习记录？'))) return;
+    addBusy.current = true; setCardSaving(true);
+    try { setFileData(await deleteVocabularyPair(fileId, entryId)); }
+    catch { setMessage(label('Could not delete card. Please try again.', '无法删除卡片，请重试。')); }
+    finally { addBusy.current = false; setCardSaving(false); }
+  }
+
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
@@ -247,10 +286,12 @@ export function FileViewPage({ fileId }: FileViewPageProps) {
             {isEditing ? null : (
               <>
                 <DeckStudyLinks fileId={fileData.file.id} />
+                <button className="secondary-action action-button" onClick={() => { setNewDutch(''); setNewChinese(''); setCardError(''); setAdding(true); }}>{label('Add card', '添加卡片')}</button>
 
                 <ol className="entry-list">
                   {fileData.entries.map((entry) => (
                     <li key={entry.id} className="entry-item">
+                      <button className="secondary-action action-button" disabled={cardSaving} aria-label={label(`Delete card: ${entry.dutch || entry.chinese}`, `删除卡片：${entry.dutch || entry.chinese}`)} onClick={() => void deleteCard(entry.id)}>{label('Delete', '删除')}</button>
                       <div className="entry-language-row">
                         <button
                           className={getEntryButtonClass(
@@ -339,6 +380,15 @@ export function FileViewPage({ fileId }: FileViewPageProps) {
           <p className="empty-state">{t('fileNotFound')}</p>
         )}
       </section>
+      {adding && <dialog ref={addDialog} className="world-editor" onCancel={event => { event.preventDefault(); void saveNewCard(true); }}>
+        <form onSubmit={event => { event.preventDefault(); void saveNewCard(false); }}>
+          <h2>{label('Add card', '添加卡片')}</h2>
+          <label>{t('dutch')}<textarea autoFocus value={newDutch} onChange={event => setNewDutch(event.target.value)} /></label>
+          <label>{t('chinese')}<textarea value={newChinese} onChange={event => setNewChinese(event.target.value)} /></label>
+          {cardError && <p role="alert">{cardError}</p>}
+          <div><button type="button" disabled={cardSaving} onClick={() => void saveNewCard(true)}>{label('Close', '关闭')}</button><button type="submit" disabled={cardSaving}>{label('Add another', '再添加一张')}</button></div>
+        </form>
+      </dialog>}
     </main>
   );
 }

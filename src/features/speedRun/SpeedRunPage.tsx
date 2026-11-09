@@ -1,3 +1,4 @@
+import { listVocabularyFiles } from '../../db/vocabularyRepository';
 import type { RunStone } from '../world/createNaveScene';
 import { liveQuery } from 'dexie';
 import { useEffect, useRef, useState } from 'react';
@@ -163,12 +164,12 @@ export function SpeedRunPage() {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
-    const subscription = liveQuery(() => Promise.all([db.files.toArray(), db.entries.toArray()])).subscribe({ next: ([decks, cards]) => { setFiles(decks); setEntries(cards); }, error: () => setError('Could not load decks.') });
+    const subscription = liveQuery(() => Promise.all([listVocabularyFiles(), db.entries.toArray()])).subscribe({ next: ([decks, cards]) => { setFiles(decks); setEntries(cards); }, error: () => setError('Could not load decks.') });
     let active = true;
     db.settings.get('speed-run-selection').then(value => { if (!active) return; if (value) { try { const saved = JSON.parse(value.value); if (Array.isArray(saved.ids)) setSelected(saved.ids.filter((id: unknown) => typeof id === 'string')); if (saved.direction === 'nl-zh') setDirection('nl-zh'); } catch { /* Use defaults for invalid saved preferences. */ } } setLoaded(true); }).catch(() => { if (active) { setError('Could not load saved selection.'); setLoaded(true); } });
     return () => { active = false; subscription.unsubscribe(); };
   }, []);
-  const pool = entries.filter(entry => selected.includes(entry.fileId));
+  const pool = entries.filter(entry => selected.includes(entry.fileId) && entry.dutch.trim() && entry.chinese.trim());
   const canPlay = pool.some(entry => makeQuestion(entry, pool, direction) !== null);
   async function play() {
     try { await db.settings.put({ key: 'speed-run-selection', value: JSON.stringify({ ids: selected, direction }), updatedAt: new Date().toISOString() }); setPlaying(true); }

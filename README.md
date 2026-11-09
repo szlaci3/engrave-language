@@ -71,3 +71,9 @@ Following trios show blank stone faces (also in reflections) until the foremost
 trio reaches its ×1 answer cutoff, before dropping starts at ×0.7. Hidden questions cannot be answered or autoplayed. On an unanswered question,
 the wrong answer breaks into 40 falling fragments and fades out in 0.65 seconds.
 The speed slider spans its control bar with 0.4 opacity over a centred speed label.
+
+File view includes Add card: Add another saves and clears the dialog; Close saves
+when at least one side has content. Empty dialogs create no card. Cards can be
+deleted from file view or the 3D edit dialog after confirmation. Deletion removes
+that card's progress, while other IDs and history remain intact. Speed Run follows
+the landing page deck order and uses cards with both sides filled.

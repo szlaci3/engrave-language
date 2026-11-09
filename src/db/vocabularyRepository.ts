@@ -176,3 +176,27 @@ export async function updateVocabularyPair(fileId: string, entryId: string, dutc
     return getVocabularyFile(fileId);
   });
 }
+
+/** Append a card, preserving all existing card IDs and progress. */
+export async function addVocabularyPair(fileId: string, dutch: string, chinese: string) {
+  if (!dutch.trim() && !chinese.trim()) throw new Error('Enter at least one side.');
+  return db.transaction('rw', db.files, db.entries, async () => {
+    if (!await db.files.get(fileId)) throw new Error('Deck not found.');
+    const entries = await db.entries.where('fileId').equals(fileId).toArray();
+    const order = entries.reduce((max, entry) => Math.max(max, entry.order), -1) + 1;
+    await db.entries.add({ id: createId(), fileId, dutch: dutch.trim(), chinese: chinese.trim(), order });
+    await db.files.update(fileId, { updatedAt: createTimestamp() });
+    return getVocabularyFile(fileId);
+  });
+}
+
+export async function deleteVocabularyPair(fileId: string, entryId: string) {
+  return db.transaction('rw', db.files, db.entries, db.progress, async () => {
+    const entry = await db.entries.get(entryId);
+    if (!entry || entry.fileId !== fileId) throw new Error('Card not found.');
+    await db.entries.delete(entryId);
+    await db.progress.where('entryId').equals(entryId).delete();
+    await db.files.update(fileId, { updatedAt: createTimestamp() });
+    return getVocabularyFile(fileId);
+  });
+}
